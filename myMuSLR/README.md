@@ -58,13 +58,12 @@ tmux new -s muslr
 ./run_all.sh
 ```
 
-脚本会先跑 baseline，再跑 LogiCAM，并分别保存：
+脚本使用 Rich 显示当前阶段、样本进度、状态计数和耗时。它会先跑 baseline，再跑
+LogiCAM，并分别保存：
 
 ```text
 /data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_baseline.jsonl
-/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_baseline.log
 /data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_logicam.jsonl
-/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_logicam.log
 ```
 
 按 `Ctrl-b`、再按 `d` 可退出 tmux 而不中止任务，之后用
