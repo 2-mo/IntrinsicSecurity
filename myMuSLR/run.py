@@ -8,29 +8,38 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from muslr import CompletionClient, load_samples, metadata_for_samples, run_samples, selected_samples
 from ripo_batch import RipoBatchClient
 
 
-DEFAULT_ENDPOINTS = (
-    "http://127.0.0.1:22000/v1",
-    "http://127.0.0.1:22001/v1",
-    "http://127.0.0.1:22002/v1",
-)
+WORKSPACE = Path(__file__).resolve().parent
+load_dotenv(WORKSPACE / ".env")
+
+
+def env_path(name: str, default: str | Path) -> Path:
+    return Path(os.environ.get(name, str(default))).expanduser()
+
+
+def env_int(name: str, default: int) -> int:
+    return int(os.environ.get(name, str(default)))
+
+
+def env_float(name: str, default: float) -> float:
+    return float(os.environ.get(name, str(default)))
 
 
 def default_template_dir() -> Path:
-    env_root = os.environ.get("MUSLR_SOURCE_ROOT")
-    if env_root:
-        return Path(env_root) / "prompts"
-    return Path(__file__).resolve().parents[1].parent / "MuSLR" / "prompts"
+    return env_path("MUSLR_PROMPT_DIR", "/data1/nemo/ex_methods/MuSLR/prompts")
 
 
 def default_local_media_root() -> Path:
-    value = os.environ.get("MUSLR_LOCAL_MEDIA_ROOT")
-    if value:
-        return Path(value)
-    return Path("/data4/r1/workspace/anom-pi-engine/outputs/muslr_media")
+    output_dir = env_path(
+        "MUSLR_OUTPUT_DIR",
+        WORKSPACE.parent / "outputs",
+    )
+    return env_path("MUSLR_LOCAL_MEDIA_ROOT", output_dir / "muslr_media")
 
 
 def parse_csv(value: str | None) -> set[str] | None:
@@ -56,9 +65,25 @@ def default_image_root(data_path: Path, explicit_image_root: Path | None) -> Pat
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", required=True, type=Path, help="GitHub JSON or Hugging Face JSON export.")
-    parser.add_argument("--output", required=True, type=Path, help="Checkpointed JSONL output path.")
-    parser.add_argument("--method", choices=("baseline", "logicam"), required=True)
+    parser.add_argument(
+        "--data",
+        type=Path,
+        default=env_path("MUSLR_DATA", "/data1/nemo/data/MuSLR"),
+        help="MuSLR metadata file or dataset directory.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(os.environ["MUSLR_OUTPUT"]).expanduser()
+        if "MUSLR_OUTPUT" in os.environ
+        else None,
+        help="Checkpointed JSONL output path (default: MUSLR_OUTPUT_DIR/muslr_<method>.jsonl).",
+    )
+    parser.add_argument(
+        "--method",
+        choices=("baseline", "logicam"),
+        default=os.environ.get("MUSLR_METHOD", "baseline"),
+    )
     parser.add_argument("--image-root", type=Path, help="Directory containing GitHub image files.")
     parser.add_argument("--template-dir", type=Path, default=default_template_dir())
     parser.add_argument(
@@ -71,23 +96,51 @@ def main() -> None:
         "--local-media-root",
         type=Path,
         default=default_local_media_root(),
-        help="Local mirror directory under vLLM --allowed-local-media-path.",
+        help="Directory used to materialize images embedded in official prompts.",
     )
     parser.add_argument("--batch-backend", choices=("ripo", "openai"), default="ripo")
     parser.add_argument(
         "--endpoints",
-        default=",".join(DEFAULT_ENDPOINTS),
+        default=os.environ.get("RIPO_ENDPOINTS", "http://127.0.0.1:22000/v1"),
         help="Comma-separated RIPO endpoints; each endpoint maps to one serving process.",
     )
-    parser.add_argument("--ripo-root", type=Path, default=Path("/data4/r1/workspace/cwork/projects/RIPO"))
-    parser.add_argument("--endpoint-concurrency", type=int, default=1)
-    parser.add_argument("--base-url", default=DEFAULT_ENDPOINTS[0])
-    parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", "not-needed"))
-    parser.add_argument("--model", default="anom-pi")
-    parser.add_argument("--max-tokens", type=int, default=1024)
-    parser.add_argument("--timeout", type=float, default=120.0)
-    parser.add_argument("--retries", type=int, default=2)
-    parser.add_argument("--workers", type=int, default=3, help="Outer batch workers; use 3 for the three serving endpoints.")
+    parser.add_argument(
+        "--ripo-root",
+        type=Path,
+        default=env_path("RIPO_ROOT", "/data1/nemo/my_projects/RIPO"),
+    )
+    parser.add_argument(
+        "--ripo-image-url-mode",
+        choices=("data", "file"),
+        default=os.environ.get("RIPO_IMAGE_URL_MODE", "data"),
+        help="How RIPO sends local images to vLLM; data works without --allowed-local-media-path access.",
+    )
+    parser.add_argument(
+        "--endpoint-concurrency",
+        type=int,
+        default=env_int("RIPO_ENDPOINT_CONCURRENCY", 1),
+    )
+    parser.add_argument(
+        "--base-url",
+        default=os.environ.get("OPENAI_BASE_URL", "http://127.0.0.1:22000/v1"),
+    )
+    parser.add_argument(
+        "--api-key",
+        default=os.environ.get(
+            "RIPO_API_KEY",
+            os.environ.get("OPENAI_API_KEY", "EMPTY"),
+        ),
+    )
+    parser.add_argument("--model", default=os.environ.get("RIPO_MODEL", "anom-pi"))
+    parser.add_argument("--max-tokens", type=int, default=env_int("MUSLR_MAX_TOKENS", 1024))
+    parser.add_argument("--timeout", type=float, default=env_float("RIPO_TIMEOUT", 120.0))
+    parser.add_argument("--retries", type=int, default=env_int("RIPO_RETRIES", 2))
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=env_int("MUSLR_WORKERS", 1),
+        help="Outer batch workers; normally endpoints x endpoint concurrency.",
+    )
     parser.add_argument("--ids", help="Comma-separated IDs to run.")
     parser.add_argument("--domains", help="Comma-separated domain filter, case-insensitive.")
     parser.add_argument("--symbols", help="Comma-separated logic symbols, such as pl,nm,fol.")
@@ -102,12 +155,18 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Validate selection and write metadata only.")
     args = parser.parse_args()
 
+    if args.output is None:
+        output_dir = env_path("MUSLR_OUTPUT_DIR", WORKSPACE.parent / "outputs")
+        args.output = output_dir / f"muslr_{args.method}.jsonl"
+
     if args.workers < 1:
         parser.error("--workers must be at least 1")
     if args.endpoint_concurrency < 1:
         parser.error("--endpoint-concurrency must be at least 1")
     if args.max_tokens < 1:
         parser.error("--max-tokens must be at least 1")
+    if not args.data.exists():
+        parser.error(f"MuSLR data path does not exist: {args.data}")
     retry_statuses = parse_csv(args.retry_statuses)
     allowed_retry_statuses = {"unparsed", "failed", "skipped_missing_image"}
     if retry_statuses and not retry_statuses <= allowed_retry_statuses:
@@ -142,10 +201,17 @@ def main() -> None:
     if not selected:
         parser.error("No samples selected.")
 
-    args_dict = {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()}
+    args_dict = {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in vars(args).items()
+    }
+    args_dict["api_key"] = "***"
     metadata_path = args.output.with_suffix(args.output.suffix + ".meta.json")
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
-    metadata_path.write_text(json.dumps(metadata_for_samples(selected, args_dict), indent=2) + "\n", encoding="utf-8")
+    metadata_path.write_text(
+        json.dumps(metadata_for_samples(selected, args_dict), indent=2) + "\n",
+        encoding="utf-8",
+    )
     print(f"Selected {len(selected)} of {len(samples)} samples. Metadata: {metadata_path}")
     if args.dry_run:
         return
@@ -160,6 +226,7 @@ def main() -> None:
             timeout=args.timeout,
             retries=args.retries,
             endpoint_concurrency=args.endpoint_concurrency,
+            image_url_mode=args.ripo_image_url_mode,
         )
     else:
         client = CompletionClient(
