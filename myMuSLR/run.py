@@ -132,7 +132,11 @@ def main() -> None:
         ),
     )
     parser.add_argument("--model", default=os.environ.get("RIPO_MODEL", "anom-pi"))
-    parser.add_argument("--max-tokens", type=int, default=env_int("MUSLR_MAX_TOKENS", 1024))
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        help="Generation limit (default: method-specific value from .env).",
+    )
     parser.add_argument("--timeout", type=float, default=env_float("RIPO_TIMEOUT", 120.0))
     parser.add_argument("--retries", type=int, default=env_int("RIPO_RETRIES", 2))
     parser.add_argument(
@@ -155,6 +159,10 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Validate selection and write metadata only.")
     args = parser.parse_args()
 
+    if args.max_tokens is None:
+        fallback_max_tokens = env_int("MUSLR_MAX_TOKENS", 1024)
+        method_variable = f"MUSLR_{args.method.upper()}_MAX_TOKENS"
+        args.max_tokens = env_int(method_variable, fallback_max_tokens)
     if args.output is None:
         output_dir = env_path("MUSLR_OUTPUT_DIR", WORKSPACE.parent / "outputs")
         args.output = output_dir / f"muslr_{args.method}.jsonl"

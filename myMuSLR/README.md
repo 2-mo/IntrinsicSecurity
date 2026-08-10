@@ -48,6 +48,37 @@ RIPO_IMAGE_URL_MODE=data
 
 ## 运行
 
+### tmux 中顺序运行 baseline 和 LogiCAM
+
+推荐直接使用一键脚本：
+
+```bash
+cd /data1/nemo/my_projects/IntrinsicSecurity/myMuSLR
+tmux new -s muslr
+./run_all.sh
+```
+
+脚本会先跑 baseline，再跑 LogiCAM，并分别保存：
+
+```text
+/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_baseline.jsonl
+/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_baseline.log
+/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_logicam.jsonl
+/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_logicam.log
+```
+
+按 `Ctrl-b`、再按 `d` 可退出 tmux 而不中止任务，之后用
+`tmux attach -t muslr` 返回。脚本支持 checkpoint 续跑；中断后重新执行同一命令即可。
+
+两种方法的输出长度可在 `.env` 中分别调整：
+
+```dotenv
+MUSLR_BASELINE_MAX_TOKENS=2048
+MUSLR_LOGICAM_MAX_TOKENS=4096
+```
+
+### 分别运行
+
 先只检查路径、数据和样本选择，不调用模型：
 
 ```bash
@@ -77,7 +108,7 @@ RIPO_IMAGE_URL_MODE=data
 跑完整 LogiCAM：
 
 ```bash
-.venv/bin/python run.py --method logicam --max-tokens 2048
+.venv/bin/python run.py --method logicam
 ```
 
 输出采用逐条追加的 JSONL checkpoint。重复执行会跳过已有结果；只重跑失败或未解析项：
