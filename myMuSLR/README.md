@@ -1,5 +1,8 @@
 # MuSLR 本地推理
 
+结构化 JSON 版 LogiCAM（Qwen3-VL-8B、RIPO endpoint 自动发现）见
+[`src/README.md`](src/README.md)。
+
 本目录使用 RIPO 的 `PIVLMConfig + PIVLMPool + run_batch` 调用本地
 OpenAI-compatible vLLM 服务，运行 MuSLR baseline 或 LogiCAM 提示词。默认配置已经对应
 当前机器：
