@@ -28,6 +28,11 @@ PAPER_DOMAINS = (
     ("General", "General Knowledge/Everyday Knowledge"),
 )
 PAPER_SYMBOLS = ("pl", "fol", "nm")
+COMPACT_DOMAINS = (
+    ("Traffic", "traffic"),
+    ("Science", "Science"),
+    ("Finance", "finance"),
+)
 DEPTH_BUCKETS = (
     ("2-3", {2, 3}),
     ("4-5", {4, 5}),
@@ -120,6 +125,45 @@ def paper_table_markdown(rows: list[dict[str, Any]]) -> str:
         ]
         lines.append("| " + " | ".join(values) + " |")
     return "\n".join(lines)
+
+
+def compact_domain_row(
+    records: list[dict[str, Any]],
+    samples_by_id: dict[str, Sample],
+    method: str,
+) -> dict[str, Any]:
+    """Build a weighted E2E row for three domains and their pooled complement."""
+    predictions = index_predictions(records)
+    samples = list(samples_by_id.values())
+    selected_domains = {domain for _, domain in COMPACT_DOMAINS}
+    row: dict[str, Any] = {
+        "Method": method,
+        "Overall": group_metrics(samples, predictions)["accuracy_end_to_end_percent"],
+    }
+    for column, domain in COMPACT_DOMAINS:
+        row[column] = group_metrics(
+            (sample for sample in samples if sample.domain == domain),
+            predictions,
+        )["accuracy_end_to_end_percent"]
+    other_metrics = group_metrics(
+        (sample for sample in samples if sample.domain not in selected_domains),
+        predictions,
+    )
+    row["Others"] = other_metrics["accuracy_end_to_end_percent"]
+    row["Others_samples"] = other_metrics["records"]
+    return row
+
+
+def compact_domain_markdown(row: dict[str, Any]) -> str:
+    columns = ["Method", "Overall", *(column for column, _ in COMPACT_DOMAINS), "Others"]
+    values = [str(row["Method"]), *(f"{float(row[column]):.2f}" for column in columns[1:])]
+    return "\n".join(
+        [
+            "| " + " | ".join(columns) + " |",
+            "| :--- | " + " | ".join("---:" for _ in columns[1:]) + " |",
+            "| " + " | ".join(values) + " |",
+        ]
+    )
 
 
 def _load_run_metadata(predictions_path: Path) -> tuple[Path, dict[str, Any]]:
@@ -219,6 +263,7 @@ def build_summary(
         if isinstance(record.get("usage"), dict) and record["usage"].get("endpoint")
     )
     table_rows = paper_table_rows(records, samples_by_id, model)
+    compact_row = compact_domain_row(records, samples_by_id, model)
 
     return {
         "run": {
@@ -245,6 +290,11 @@ def build_summary(
         "paper_table": {
             "metric": "end-to-end exact-match accuracy percent; unparsed or missing predictions count as incorrect",
             "rows": table_rows,
+        },
+        "compact_domain_table": {
+            "metric": "end-to-end exact-match accuracy percent; unparsed or missing predictions count as incorrect",
+            "others_definition": "all samples outside Traffic, Science, and Finance, pooled before computing accuracy",
+            "row": compact_row,
         },
         "reasoning_quality": {
             "status": "not_requested",
@@ -427,6 +477,22 @@ def print_rich_report(summary: dict[str, Any], console: Console | None = None) -
         _add_metric_row(domain_table, label, summary["by_domain"][domain])
     console.print(domain_table)
 
+    compact = Table(title="Compact Domain E2E Accuracy", box=box.SIMPLE_HEAVY)
+    compact.add_column("Method", style="bold")
+    for column in ("Overall", "Traffic", "Science", "Finance", "Others"):
+        compact.add_column(
+            column,
+            justify="right",
+            style="bold cyan" if column == "Overall" else None,
+        )
+    compact_row = summary["compact_domain_table"]["row"]
+    compact.add_row(
+        str(compact_row["Method"]),
+        *(f"{float(compact_row[column]):.2f}" for column in ("Overall", "Traffic", "Science", "Finance", "Others")),
+    )
+    compact.caption = f"Others pools the remaining {compact_row['Others_samples']} samples"
+    console.print(compact)
+
     paper = Table(title="Paper Table 1 Format: Symbol x Domain E2E Accuracy", box=box.SIMPLE)
     paper.add_column("Symbol", style="bold")
     for column, _ in PAPER_DOMAINS:
@@ -592,6 +658,13 @@ def markdown_report(summary: dict[str, Any]) -> str:
         "",
         _markdown_metric_table(domains),
         "",
+        "### Compact Domain E2E Accuracy",
+        "",
+        compact_domain_markdown(summary["compact_domain_table"]["row"]),
+        "",
+        f"`Others` pools the remaining **{summary['compact_domain_table']['row']['Others_samples']}** "
+        "samples before computing accuracy; it is not an unweighted mean of domain percentages.",
+        "",
         "### Symbol x Domain (Paper Table 1)",
         "",
         paper_table_markdown(summary["paper_table"]["rows"]),
@@ -662,6 +735,11 @@ def main() -> None:
         type=Path,
         help="Optional paper-style Markdown table path (kept for command compatibility).",
     )
+    parser.add_argument(
+        "--compact-table-output",
+        type=Path,
+        help="Optional compact Overall/Traffic/Science/Finance/Others Markdown table path.",
+    )
     args = parser.parse_args()
 
     samples_by_id = sample_index(load_samples(args.data))
@@ -697,8 +775,18 @@ def main() -> None:
             paper_table_markdown(summary["paper_table"]["rows"]) + "\n",
             encoding="utf-8",
         )
+    if args.compact_table_output:
+        args.compact_table_output.parent.mkdir(parents=True, exist_ok=True)
+        args.compact_table_output.write_text(
+            compact_domain_markdown(summary["compact_domain_table"]["row"]) + "\n",
+            encoding="utf-8",
+        )
 
-    written = [path for path in (args.report, args.output, args.table_output) if path]
+    written = [
+        path
+        for path in (args.report, args.output, args.table_output, args.compact_table_output)
+        if path
+    ]
     if written:
         Console().print("[dim]Written:[/dim] " + ", ".join(str(path) for path in written))
 

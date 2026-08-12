@@ -47,6 +47,10 @@ src/scripts/run_baseline_json.sh
 src/scripts/evaluate_baseline_json.sh
 ```
 
+Each evaluator also writes a compact publication table with `Method`, `Overall`,
+`Traffic`, `Science`, `Finance`, and `Others`. All cells use strict E2E accuracy;
+`Others` pools every remaining sample before computing the percentage.
+
 ## LogiCAM-JSON
 
 ```bash

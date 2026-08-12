@@ -24,4 +24,5 @@ exec "$PYTHON" "$WORKSPACE/evaluate.py" \
   --output "$OUTPUT_DIR/muslr_baseline_json_qwen3vl8b.summary.json" \
   --report "$OUTPUT_DIR/muslr_baseline_json_qwen3vl8b.report.md" \
   --table-output "$OUTPUT_DIR/muslr_baseline_json_qwen3vl8b.table.md" \
+  --compact-table-output "$OUTPUT_DIR/muslr_baseline_json_qwen3vl8b.compact.table.md" \
   "$@"
