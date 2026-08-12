@@ -15,7 +15,7 @@ from typing import Any
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, render_template, send_file
 
-WORKSPACE = Path(__file__).resolve().parents[1]
+WORKSPACE = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = WORKSPACE.parent
 load_dotenv(WORKSPACE / ".env", override=False)
 if str(WORKSPACE) not in sys.path:
@@ -194,7 +194,7 @@ def create_app(predictions_path: Path, dataset_path: Path) -> Flask:
 
     @app.get("/")
     def index() -> str:
-        return render_template("logicam_json_dashboard.html")
+        return render_template("index.html")
 
     @app.get("/api/data")
     def api_data() -> Any:

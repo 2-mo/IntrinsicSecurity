@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-WORKSPACE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+WORKSPACE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON="$WORKSPACE/.venv/bin/python"
 ENV_FILE="$WORKSPACE/.env"
 

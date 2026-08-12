@@ -25,7 +25,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-WORKSPACE = Path(__file__).resolve().parents[1]
+WORKSPACE = Path(__file__).resolve().parents[2]
 load_dotenv(WORKSPACE / ".env", override=False)
 RIPO_ROOT = Path(os.environ.get("RIPO_ROOT", "/data1/nemo/my_projects/RIPO"))
 for source_root in (WORKSPACE, RIPO_ROOT / "src"):
@@ -41,7 +41,7 @@ from ripo.agent.client import (
 )
 from ripo.configs.core.model import ModelConfig
 
-from logicam_json import (
+from logicam_json.schema import (
     RETURN_EXAMPLE,
     SCHEMA_VERSION,
     response_format_for,

@@ -9,11 +9,11 @@ import shutil
 import sys
 from pathlib import Path
 
-WORKSPACE = Path(__file__).resolve().parents[1]
+WORKSPACE = Path(__file__).resolve().parents[2]
 if str(WORKSPACE) not in sys.path:
     sys.path.insert(0, str(WORKSPACE))
 
-from logicam_json import validate_structured_result  # noqa: E402
+from logicam_json.schema import validate_structured_result  # noqa: E402
 from muslr import load_jsonl, load_samples  # noqa: E402
 
 

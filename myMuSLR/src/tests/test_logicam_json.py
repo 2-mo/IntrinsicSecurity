@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from logicam_json import (
+from logicam_json.schema import (
     LOGIC_SPECS,
     SCHEMA_VERSION,
     response_format_for,
