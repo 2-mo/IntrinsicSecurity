@@ -13,7 +13,6 @@ WORKSPACE = Path(__file__).resolve().parents[2]
 if str(WORKSPACE) not in sys.path:
     sys.path.insert(0, str(WORKSPACE))
 
-from logicam_json.schema import validate_structured_result  # noqa: E402
 from muslr import load_jsonl, load_samples  # noqa: E402
 
 
@@ -36,9 +35,7 @@ def main() -> None:
         sample = samples[row_index]
         prediction = str(structured["final_answer"]).upper()
         original_error = str(row.pop("error", ""))
-        warnings = validate_structured_result(structured, sample)
-        if original_error and not warnings:
-            warnings.append(original_error.partition(": ")[2] or original_error)
+        warnings = [original_error.partition(": ")[2] or original_error] if original_error else []
         row.update(
             status="completed",
             prediction=prediction,

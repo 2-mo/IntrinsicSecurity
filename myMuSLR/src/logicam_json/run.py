@@ -4,14 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
 from collections import Counter
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib import request
+from urllib.parse import unquote, urlparse
 
 from dotenv import load_dotenv
 from rich.progress import (
@@ -44,12 +47,16 @@ from ripo.configs.core.model import ModelConfig
 from logicam_json.schema import (
     RETURN_EXAMPLE,
     SCHEMA_VERSION,
+    problem_text,
     response_format_for,
-    system_prompt_for,
-    user_prompt_for,
-    validate_structured_result,
 )
-from muslr import Sample, load_jsonl, load_samples, selected_samples
+from muslr import (
+    Sample,
+    load_jsonl,
+    load_samples,
+    parse_template_content,
+    selected_samples,
+)
 
 
 def env_int(name: str, default: int) -> int:
@@ -103,6 +110,50 @@ def resolve_image(sample: Sample, data_path: Path) -> Path:
     )
 
 
+def template_path(template_dir: Path, symbol: str) -> Path:
+    filename = "prompt_fol.txt" if symbol.lower() == "fol" else "prompt.txt"
+    return template_dir / "logicam" / filename
+
+
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+@lru_cache(maxsize=4)
+def template_blocks(path: Path, media_root: Path) -> tuple[dict[str, Any], ...]:
+    """Load every byte of the official prompt and materialize its example images."""
+    return tuple(
+        parse_template_content(
+            path.read_text(encoding="utf-8"),
+            local_media_root=media_root,
+            template_name=path.name,
+        )
+    )
+
+
+def logicam_messages(
+    sample: Sample,
+    *,
+    data_path: Path,
+    template_dir: Path,
+    media_root: Path,
+) -> tuple[list[Any], Path]:
+    prompt_path = template_path(template_dir, sample.symbol).resolve()
+    blocks = []
+    for block in template_blocks(prompt_path, media_root.resolve()):
+        if block.get("type") == "text":
+            blocks.append(msg.text(str(block.get("text", ""))))
+            continue
+        image_url = block.get("image_url")
+        url = image_url.get("url") if isinstance(image_url, dict) else None
+        if not isinstance(url, str) or not url.startswith("file://"):
+            raise ValueError("Official LogiCAM example image was not materialized locally")
+        blocks.append(msg.image(Path(unquote(urlparse(url).path))))
+    blocks.append(msg.text(problem_text(sample)))
+    blocks.append(msg.image(resolve_image(sample, data_path)))
+    return [msg.user(blocks)], prompt_path
+
+
 def served_model_roots(
     endpoints: tuple[str, ...], api_key: str
 ) -> dict[str, list[str]]:
@@ -134,17 +185,21 @@ def run_one(
     sample: Sample,
     *,
     data_path: Path,
+    template_dir: Path,
+    media_root: Path,
     max_tokens: int,
 ) -> dict[str, Any]:
     raw_output: str | None = None
     usage: dict[str, Any] | None = None
     latency_seconds: float | None = None
+    prompt_path: Path | None = None
     try:
-        image_path = resolve_image(sample, data_path)
-        messages = [
-            msg.system(system_prompt_for(sample)),
-            msg.user(text=user_prompt_for(sample), images=[image_path]),
-        ]
+        messages, prompt_path = logicam_messages(
+            sample,
+            data_path=data_path,
+            template_dir=template_dir,
+            media_root=media_root,
+        )
         metadata = client.complete_with_metadata(
             messages,
             max_tokens=max_tokens,
@@ -163,7 +218,11 @@ def run_one(
         structured = PIVLM.parse(raw_output, return_example=RETURN_EXAMPLE)
         if not isinstance(structured, dict):
             raise TypeError("Structured output is not a JSON object")
-        consistency_warnings = validate_structured_result(structured, sample)
+        reasoning_steps = structured["reasoning_steps"]
+        if not isinstance(reasoning_steps, list) or not all(
+            isinstance(step, str) for step in reasoning_steps
+        ):
+            raise TypeError("reasoning_steps is not a list of strings")
         prediction = str(structured["final_answer"]).upper()
         return {
             "id": sample.id,
@@ -174,10 +233,10 @@ def run_one(
             "expected_answer": sample.answer.upper(),
             "correct": prediction == sample.answer.upper(),
             "structured_output": structured,
-            "consistency_warnings": consistency_warnings,
-            "output": raw_output,
+            "output": "\n\n".join(reasoning_steps),
+            "raw_output": raw_output,
             "schema_version": SCHEMA_VERSION,
-            "method": "logicam_json",
+            "method": "logicam_json_v2",
             "task_type": sample.task_type,
             "domain": sample.domain,
             "symbol": sample.symbol,
@@ -185,6 +244,8 @@ def run_one(
             "usage": usage,
             "latency_seconds": latency_seconds,
             "model": metadata.model,
+            "prompt_template": str(prompt_path),
+            "prompt_sha256": file_sha256(prompt_path),
         }
     except FileNotFoundError as error:
         status = "skipped_missing_image"
@@ -207,11 +268,13 @@ def run_one(
         "usage": usage,
         "latency_seconds": latency_seconds,
         "schema_version": SCHEMA_VERSION,
-        "method": "logicam_json",
+        "method": "logicam_json_v2",
         "task_type": sample.task_type,
         "domain": sample.domain,
         "symbol": sample.symbol,
         "depth": sample.depth,
+        "prompt_template": str(prompt_path) if prompt_path else None,
+        "prompt_sha256": file_sha256(prompt_path) if prompt_path else None,
     }
 
 
@@ -222,6 +285,7 @@ def write_metadata(
     samples: list[Sample],
     endpoints: tuple[str, ...],
     roots: dict[str, list[str]],
+    prompt_hashes: dict[str, str],
 ) -> None:
     configuration = {
         key: str(value) if isinstance(value, Path) else value
@@ -229,13 +293,15 @@ def write_metadata(
     }
     configuration["api_key"] = "***"
     configuration["max_try"] = 1
-    configuration["method"] = "logicam_json"
+    configuration["method"] = "logicam_json_v2"
+    configuration["prompt_contract"] = "released_few_shot_prompt_plus_minimal_json_wrapper"
     payload = {
         "schema_version": SCHEMA_VERSION,
         "selected_samples": len(samples),
         "sample_ids": [sample.id for sample in samples],
         "resolved_endpoints": list(endpoints),
         "served_model_roots": roots,
+        "official_prompt_sha256": prompt_hashes,
         "configuration": configuration,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -257,47 +323,57 @@ def main() -> None:
         "--output",
         type=Path,
         default=env_path(
-            "MUSLR_JSON_OUTPUT",
-            default_output_dir / "muslr_logicam_json_qwen3vl8b.jsonl",
+            "MUSLR_LOGICAM_JSON_OUTPUT",
+            default_output_dir / "muslr_logicam_json_v2_qwen3vl8b.jsonl",
         ),
     )
     parser.add_argument(
+        "--template-dir",
+        type=Path,
+        default=env_path("MUSLR_PROMPT_DIR", "/data1/nemo/ex_methods/MuSLR/prompts"),
+    )
+    parser.add_argument(
+        "--media-root",
+        type=Path,
+        default=env_path("MUSLR_LOCAL_MEDIA_ROOT", default_output_dir / "muslr_media"),
+    )
+    parser.add_argument(
         "--endpoints",
-        default=os.environ.get("MUSLR_JSON_ENDPOINTS", "auto"),
+        default=os.environ.get("MUSLR_LOGICAM_JSON_ENDPOINTS", "auto"),
         help="Comma-separated endpoints or 'auto' for RIPO runtime discovery.",
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("MUSLR_JSON_MODEL", "anom-pi"),
+        default=os.environ.get("MUSLR_LOGICAM_JSON_MODEL", "anom-pi"),
     )
     parser.add_argument(
         "--api-key",
-        default=os.environ.get("MUSLR_JSON_API_KEY", "EMPTY"),
+        default=os.environ.get("MUSLR_LOGICAM_JSON_API_KEY", "EMPTY"),
     )
     parser.add_argument(
         "--image-url-mode",
         choices=("data", "file"),
-        default=os.environ.get("MUSLR_JSON_IMAGE_URL_MODE", "data"),
+        default=os.environ.get("MUSLR_LOGICAM_JSON_IMAGE_URL_MODE", "data"),
     )
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=env_int("MUSLR_JSON_MAX_TOKENS", 2048),
+        default=env_int("MUSLR_LOGICAM_JSON_MAX_TOKENS", 4096),
     )
     parser.add_argument(
         "--workers",
         type=int,
-        default=env_int("MUSLR_JSON_WORKERS", 2),
+        default=env_int("MUSLR_LOGICAM_JSON_WORKERS", 2),
     )
     parser.add_argument(
         "--pool-concurrency",
         type=int,
-        default=env_int("MUSLR_JSON_POOL_CONCURRENCY", 2),
+        default=env_int("MUSLR_LOGICAM_JSON_POOL_CONCURRENCY", 2),
     )
     parser.add_argument(
         "--timeout",
         type=float,
-        default=env_float("MUSLR_JSON_TIMEOUT", 180.0),
+        default=env_float("MUSLR_LOGICAM_JSON_TIMEOUT", 300.0),
     )
     parser.add_argument("--ids", help="Comma-separated sample IDs.")
     parser.add_argument("--domains", help="Comma-separated domain filter.")
@@ -315,6 +391,8 @@ def main() -> None:
 
     if not args.data.exists():
         parser.error(f"MuSLR data path does not exist: {args.data}")
+    if not args.template_dir.is_dir():
+        parser.error(f"Prompt directory does not exist: {args.template_dir}")
     if not RIPO_ROOT.is_dir():
         parser.error(f"RIPO root does not exist: {RIPO_ROOT}")
     if args.max_tokens < 1 or args.workers < 1 or args.pool_concurrency < 1:
@@ -341,18 +419,28 @@ def main() -> None:
     )
     if not samples:
         parser.error("No samples selected")
+    used_prompt_paths = {
+        template_path(args.template_dir, sample.symbol).resolve() for sample in samples
+    }
+    missing_prompts = [path for path in used_prompt_paths if not path.is_file()]
+    if missing_prompts:
+        parser.error("Missing official prompts: " + ", ".join(map(str, missing_prompts)))
+    prompt_hashes = {str(path): file_sha256(path) for path in sorted(used_prompt_paths)}
     for sample in samples:
         response_format_for(sample)
         resolve_image(sample, args.data)
 
     metadata_path = args.output.with_suffix(args.output.suffix + ".meta.json")
     if args.dry_run:
+        for path in used_prompt_paths:
+            template_blocks(path, args.media_root.resolve())
         write_metadata(
             metadata_path,
             args=args,
             samples=samples,
             endpoints=raw_endpoints,
             roots={},
+            prompt_hashes=prompt_hashes,
         )
         print(
             f"Validated {len(samples)} of {len(all_samples)} samples: {metadata_path}"
@@ -378,6 +466,7 @@ def main() -> None:
         samples=samples,
         endpoints=config.endpoints,
         roots=roots,
+        prompt_hashes=prompt_hashes,
     )
 
     previous = [] if args.no_resume else load_jsonl(args.output)
@@ -425,7 +514,7 @@ def main() -> None:
         progress,
     ):
         progress_task = progress.add_task(
-            "LogiCAM-JSON",
+            "LogiCAM-JSON v2",
             total=len(samples),
             completed=counters["resumed"],
             status=status_text(),
@@ -439,6 +528,8 @@ def main() -> None:
                     client,
                     sample,
                     data_path=args.data,
+                    template_dir=args.template_dir,
+                    media_root=args.media_root,
                     max_tokens=args.max_tokens,
                 ): sample
                 for sample in pending

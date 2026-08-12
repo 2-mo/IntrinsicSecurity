@@ -118,6 +118,7 @@
     .premises { color: var(--muted); font: 10px var(--mono); }
     .conclusion { margin-top: 8px; color: var(--ink); font: 12px/1.4 var(--mono); overflow-wrap: anywhere; }
     .justification { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .original-step { margin: 0; color: #34413c; font: 12px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
     .candidate-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
     .candidate { padding: 11px; border: 1px solid var(--line); border-radius: 10px; }
     .candidate.entailed, .candidate.true { border-color: #89b8a6; background: #f1faf5; }
@@ -287,6 +288,10 @@
       return `<div class="candidate-grid">${items.map(item => `<div class="candidate ${esc(item.verdict)}"><div class="candidate-label"><strong>${esc(item.candidate)}</strong><span class="badge ${['entailed','true'].includes(item.verdict) ? 'ok' : ['contradicted','false'].includes(item.verdict) ? 'bad' : 'warn'}">${esc(item.verdict)}</span></div><div class="candidate-statement">${esc(item.formal_statement)}</div><div class="evidence">证据：${esc((item.evidence || []).join(', ') || '—')}</div></div>`).join('')}</div>`;
     }
 
+    function originalReasoning(items) {
+      return `<div class="timeline">${items.map((item,index) => `<div class="step"><div class="step-top"><span class="logic-id">ITEM ${index + 1}</span></div><pre class="original-step">${esc(item)}</pre></div>`).join('')}</div>`;
+    }
+
     function renderDetail() {
       const record = state.data.records.find(row => row.id === state.selected);
       if (!record) { document.querySelector('#detail').innerHTML = '<div class="empty">选择一个样本查看推导链</div>'; return; }
@@ -295,15 +300,15 @@
       const tokens = record.usage?.completion_tokens ?? '-';
       const diagnostics = record.consistency_warnings?.length ? `<div class="error-box" style="border-left-color:var(--amber);color:#725017;background:var(--amber-soft)"><strong>仅诊断，不影响 final_answer 判分</strong><br>${record.consistency_warnings.map(esc).join('<br>')}</div>` : '';
       const err = record.error ? `<div class="error-box"><strong>${esc(record.status)}</strong><br>${esc(record.error)}</div>` : '';
+      const reasoningBody = result.reasoning_steps?.length
+        ? `<div class="reasoning-head"><h3>LogiCAM 原版推理</h3><span class="card-caption">${result.reasoning_steps.length} JSON items · ${esc(record.prompt_template?.split('/').pop() || '')}</span></div>${originalReasoning(result.reasoning_steps)}`
+        : `<div class="reasoning-head"><h3>01 · 视觉事实</h3><span class="card-caption">Visual grounding</span></div><div class="reasoning-grid">${logicCards(result.visual_facts, 'fact')}</div><div class="reasoning-head"><h3>02 · 上下文形式化</h3><span class="card-caption">${esc(result.logic_family || record.symbol || '')}</span></div><div class="reasoning-grid">${logicCards(result.context_formalization, 'context')}</div><div class="reasoning-head"><h3>03 · 推导链</h3><span class="card-caption">${result.derivation_steps?.length || 0} steps</span></div>${derivation(result.derivation_steps)}<div class="reasoning-head"><h3>04 · 候选判定</h3><span class="card-caption">Evidence-linked verdicts</span></div>${candidates(result.candidate_evaluations)}`;
       document.querySelector('#detail').innerHTML = `
         <div class="detail-head"><div><div class="detail-tags">${statusBadge(record)}<span class="badge neutral">${esc(String(record.symbol || '').toUpperCase())}</span><span class="badge neutral">depth ${esc(record.depth ?? '-')}</span></div><h2>${esc(record.id)}</h2></div><div class="usage">${esc(record.domain)}<br>${tokens} completion tokens · ${Number(record.latency_seconds || 0).toFixed(2)}s</div></div>
         ${err}${diagnostics}
         <div class="problem"><div class="image-wrap"><img src="${esc(sample.image_url)}" alt="${esc(record.id)}"></div><div class="prompt"><h3>Context</h3><p class="context">${esc(sample.context)}</p><h3>Question</h3><p>${esc(sample.question)}</p>${choiceRows(sample, record)}<div class="answer-strip"><div class="answer-cell"><span>Gold</span><strong>${esc(sample.answer)}</strong></div><div class="answer-cell"><span>Prediction</span><strong>${esc(record.prediction ?? '—')}</strong></div><div class="answer-cell"><span>Status</span><strong>${record.correct ? '✓' : '×'}</strong></div></div></div></div>
-        <div class="reasoning-head"><h3>01 · 视觉事实</h3><span class="card-caption">Visual grounding</span></div><div class="reasoning-grid">${logicCards(result.visual_facts, 'fact')}</div>
-        <div class="reasoning-head"><h3>02 · 上下文形式化</h3><span class="card-caption">${esc(result.logic_family || record.symbol || '')}</span></div><div class="reasoning-grid">${logicCards(result.context_formalization, 'context')}</div>
-        <div class="reasoning-head"><h3>03 · 推导链</h3><span class="card-caption">${result.derivation_steps?.length || 0} steps</span></div>${derivation(result.derivation_steps)}
-        <div class="reasoning-head"><h3>04 · 候选判定</h3><span class="card-caption">Evidence-linked verdicts</span></div>${candidates(result.candidate_evaluations)}
-        <div class="final-box"><strong>Final · ${esc(result.final_answer ?? record.prediction ?? '—')}</strong><p>${esc(result.concise_reason || '结构化结果未通过一致性检查。')}</p></div>`;
+        ${reasoningBody}
+        <div class="final-box"><strong>Final · ${esc(result.final_answer ?? record.prediction ?? '—')}</strong><p>${esc(result.concise_reason || (result.reasoning_steps ? '按 final_answer 直接评分；JSON 结构只约束输出边界。' : '结构化结果未通过一致性检查。'))}</p></div>`;
     }
 
     async function loadData() {

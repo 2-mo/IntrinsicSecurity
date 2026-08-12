@@ -1,125 +1,54 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
-from logicam_json.schema import (
-    LOGIC_SPECS,
-    SCHEMA_VERSION,
-    response_format_for,
-    system_prompt_for,
-    validate_structured_result,
-)
+from logicam_json.run import template_path
+from logicam_json.schema import problem_text, response_format_for
 from muslr import Sample
 
 
-def sample(symbol: str = "pl", choices: bool = True) -> Sample:
+def sample(symbol: str = "pl", *, choices: bool = True) -> Sample:
     return Sample(
-        id="test",
-        source_id="test",
+        id="sample-1",
+        source_id="sample-1",
         row_index=0,
-        image="images/test.jpg",
+        image="image.jpg",
         domain="Science",
         symbol=symbol,
-        depth=3,
+        depth=2,
         context="If P then Q.",
-        question="What follows?",
+        question="Which statement follows?" if choices else "Is Q true?",
         choices=["A. P", "B. Q", "C. R", "D. S"] if choices else [],
         answer="B" if choices else "True",
     )
 
 
-def valid_result(item: Sample) -> dict:
-    family = LOGIC_SPECS[item.symbol]["label"]
-    candidates = ["A", "B", "C", "D"] if item.choices else ["ARGUMENT"]
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "logic_family": family,
-        "task_type": item.task_type,
-        "visual_facts": [
-            {
-                "id": "V1",
-                "description": "visible fact",
-                "atom": "P",
-                "polarity": "positive",
-            }
-        ],
-        "context_formalization": [
-            {"id": "C1", "natural_language": "If P then Q", "formula": "P -> Q"}
-        ],
-        "derivation_steps": [
-            {
-                "id": "D1",
-                "rule": "MODUS_PONENS",
-                "premises": ["V1", "C1"],
-                "conclusion": "Q",
-                "justification": "P and P -> Q entail Q.",
-            }
-        ],
-        "candidate_evaluations": [
-            {
-                "candidate": candidate,
-                "formal_statement": "Q",
-                "verdict": (
-                    "true"
-                    if candidate == "ARGUMENT"
-                    else "entailed"
-                    if candidate == "B"
-                    else "unsupported"
-                ),
-                "evidence": ["D1"] if candidate in {"B", "ARGUMENT"} else [],
-            }
-            for candidate in candidates
-        ],
-        "final_answer": "B" if item.choices else "True",
-        "concise_reason": "Q follows by modus ponens.",
-    }
-
-
 class LogiCAMJSONTests(unittest.TestCase):
-    def test_multiple_choice_schema_constrains_four_candidates_and_answer(self) -> None:
-        item = sample()
-        schema = response_format_for(item)["json_schema"]["schema"]
-        candidates = schema["properties"]["candidate_evaluations"]
-        self.assertEqual(candidates["minItems"], 4)
-        self.assertEqual(candidates["maxItems"], 4)
-        self.assertEqual(
-            schema["properties"]["final_answer"]["enum"], ["A", "B", "C", "D"]
-        )
+    def test_schema_is_a_minimal_presentation_wrapper(self) -> None:
+        schema = response_format_for(sample())["json_schema"]["schema"]
+        self.assertEqual(set(schema["properties"]), {"reasoning_steps", "final_answer"})
+        self.assertEqual(schema["properties"]["reasoning_steps"]["maxItems"], 16)
+        self.assertEqual(schema["properties"]["final_answer"]["enum"], ["A", "B", "C", "D"])
 
     def test_truth_schema_constrains_truth_labels(self) -> None:
-        item = sample(choices=False)
-        schema = response_format_for(item)["json_schema"]["schema"]
-        self.assertEqual(
-            schema["properties"]["final_answer"]["enum"],
-            ["True", "False", "Unknown"],
-        )
-        verdict = schema["properties"]["candidate_evaluations"]["items"]["properties"][
-            "verdict"
-        ]
-        self.assertEqual(verdict["enum"], ["true", "false", "unknown"])
+        schema = response_format_for(sample(choices=False))["json_schema"]["schema"]
+        self.assertEqual(schema["properties"]["final_answer"]["enum"], ["True", "False", "Unknown"])
 
-    def test_logic_families_have_distinct_templates(self) -> None:
-        self.assertIn("UNIVERSAL_INSTANTIATION", system_prompt_for(sample("fol")))
-        self.assertIn("DEFAULT_INFERENCE", system_prompt_for(sample("nm")))
-        self.assertNotIn("DEFAULT_INFERENCE", system_prompt_for(sample("pl")))
+    def test_fol_uses_the_released_fol_prompt(self) -> None:
+        root = Path("/prompts")
+        self.assertEqual(template_path(root, "fol"), root / "logicam" / "prompt_fol.txt")
+        self.assertEqual(template_path(root, "pl"), root / "logicam" / "prompt.txt")
+        self.assertEqual(template_path(root, "nm"), root / "logicam" / "prompt.txt")
 
-    def test_valid_result_passes_semantic_validation(self) -> None:
-        item = sample()
-        self.assertEqual(validate_structured_result(valid_result(item), item), [])
-
-    def test_duplicate_candidate_is_reported_without_rejection(self) -> None:
-        item = sample()
-        result = valid_result(item)
-        result["candidate_evaluations"][3]["candidate"] = "A"
-        warnings = validate_structured_result(result, item)
-        self.assertTrue(any("candidate_evaluations mismatch" in item for item in warnings))
-
-    def test_final_answer_mismatch_is_only_a_warning(self) -> None:
-        item = sample()
-        result = valid_result(item)
-        result["final_answer"] = "A"
-        warnings = validate_structured_result(result, item)
-        self.assertTrue(any("exactly one entailed candidate" in item for item in warnings))
+    def test_query_keeps_released_field_order_without_custom_rules(self) -> None:
+        rendered = problem_text(sample())
+        self.assertLess(rendered.index("Image:"), rendered.index("Context:"))
+        self.assertLess(rendered.index("Context:"), rendered.index("Question:"))
+        self.assertLess(rendered.index("Question:"), rendered.index("Options:"))
+        self.assertNotIn("12 derivation", rendered)
+        self.assertNotIn("candidate_evaluations", rendered)
+        self.assertNotIn("allowed rule", rendered.lower())
 
 
 if __name__ == "__main__":

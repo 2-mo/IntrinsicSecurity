@@ -8,7 +8,7 @@ JSON interface demonstrated in `02_pi_engine_text_inference.ipynb`, section 5.
 ```text
 src/
 ├── baseline_json/       official few-shot baseline + minimal JSON contract
-├── logicam_json/        LogiCAM formal reasoning + structured JSON contract
+├── logicam_json/        official LogiCAM few-shot prompts + minimal JSON wrapper
 ├── result_dashboard/    interactive result inspection page
 ├── scripts/             run, evaluate, and dashboard shell entry points
 └── tests/               schema and prompt contract tests
@@ -18,9 +18,10 @@ src/
 continues to use the official three-example baseline CoT prompt and introduces no
 formal notation, rule catalog, candidate consistency gate, or LogiCAM behavior.
 
-`logicam_json` contains visual facts, context formalization, derivation steps,
-candidate evaluations, and a schema-constrained final answer. Cross-field checks
-are diagnostic warnings only; every parseable `final_answer` is scored.
+`logicam_json` preserves the complete released `prompt.txt` / `prompt_fol.txt`,
+including their example images and original reasoning demonstrations. JSON only
+wraps original-style `reasoning_steps` and schema-constrained `final_answer`; it does
+not add a rule enum, step limit, formalization template, or consistency gate.
 
 ## Baseline-JSON
 
@@ -78,3 +79,5 @@ Choose another result with
 
 Both runners use one model request attempt, Rich progress with completed/total,
 temperature 0, checkpoint resume, and path/configuration values from `.env`.
+LogiCAM-JSON uses 4,096 output tokens to match the released free-text run; the
+shorter baseline remains at 1,024.

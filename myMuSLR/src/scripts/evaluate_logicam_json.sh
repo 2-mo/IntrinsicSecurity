@@ -15,14 +15,14 @@ fi
 
 DATA="${MUSLR_DATA:-/data1/nemo/data/MuSLR}"
 OUTPUT_DIR="${MUSLR_OUTPUT_DIR:-/data1/nemo/my_projects/IntrinsicSecurity/outputs}"
-PREDICTIONS="${MUSLR_JSON_OUTPUT:-$OUTPUT_DIR/muslr_logicam_json_qwen3vl8b.jsonl}"
+PREDICTIONS="${MUSLR_LOGICAM_JSON_OUTPUT:-$OUTPUT_DIR/muslr_logicam_json_v2_qwen3vl8b.jsonl}"
 
 exec "$PYTHON" "$WORKSPACE/evaluate.py" \
   --data "$DATA" \
   --predictions "$PREDICTIONS" \
-  --model "Qwen3-VL-8B + LogiCAM-JSON" \
-  --output "$OUTPUT_DIR/muslr_logicam_json_qwen3vl8b.summary.json" \
-  --report "$OUTPUT_DIR/muslr_logicam_json_qwen3vl8b.report.md" \
-  --table-output "$OUTPUT_DIR/muslr_logicam_json_qwen3vl8b.table.md" \
-  --compact-table-output "$OUTPUT_DIR/muslr_logicam_json_qwen3vl8b.compact.table.md" \
+  --model "Qwen3-VL-8B + LogiCAM-JSON v2" \
+  --output "$OUTPUT_DIR/muslr_logicam_json_v2_qwen3vl8b.summary.json" \
+  --report "$OUTPUT_DIR/muslr_logicam_json_v2_qwen3vl8b.report.md" \
+  --table-output "$OUTPUT_DIR/muslr_logicam_json_v2_qwen3vl8b.table.md" \
+  --compact-table-output "$OUTPUT_DIR/muslr_logicam_json_v2_qwen3vl8b.compact.table.md" \
   "$@"

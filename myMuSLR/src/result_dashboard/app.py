@@ -25,7 +25,11 @@ from muslr import Sample, load_jsonl, load_samples  # noqa: E402
 
 
 def _existing_default_predictions() -> Path:
-    configured = os.getenv("MUSLR_JSON_VIS_INPUT") or os.getenv("MUSLR_JSON_OUTPUT")
+    configured = (
+        os.getenv("MUSLR_JSON_VIS_INPUT")
+        or os.getenv("MUSLR_LOGICAM_JSON_OUTPUT")
+        or os.getenv("MUSLR_JSON_OUTPUT")
+    )
     if configured and Path(configured).is_file():
         return Path(configured).resolve()
 
