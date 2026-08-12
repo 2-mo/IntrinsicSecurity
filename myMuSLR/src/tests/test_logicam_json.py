@@ -105,21 +105,21 @@ class LogiCAMJSONTests(unittest.TestCase):
 
     def test_valid_result_passes_semantic_validation(self) -> None:
         item = sample()
-        validate_structured_result(valid_result(item), item)
+        self.assertEqual(validate_structured_result(valid_result(item), item), [])
 
-    def test_duplicate_candidate_is_rejected(self) -> None:
+    def test_duplicate_candidate_is_reported_without_rejection(self) -> None:
         item = sample()
         result = valid_result(item)
         result["candidate_evaluations"][3]["candidate"] = "A"
-        with self.assertRaisesRegex(ValueError, "candidate_evaluations mismatch"):
-            validate_structured_result(result, item)
+        warnings = validate_structured_result(result, item)
+        self.assertTrue(any("candidate_evaluations mismatch" in item for item in warnings))
 
-    def test_final_answer_must_match_entailed_candidate(self) -> None:
+    def test_final_answer_mismatch_is_only_a_warning(self) -> None:
         item = sample()
         result = valid_result(item)
         result["final_answer"] = "A"
-        with self.assertRaisesRegex(ValueError, "exactly one entailed candidate"):
-            validate_structured_result(result, item)
+        warnings = validate_structured_result(result, item)
+        self.assertTrue(any("exactly one entailed candidate" in item for item in warnings))
 
 
 if __name__ == "__main__":

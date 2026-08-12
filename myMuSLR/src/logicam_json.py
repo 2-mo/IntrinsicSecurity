@@ -262,39 +262,34 @@ Build the JSON result in this order: visual facts, context formalization, deriva
 """
 
 
-def validate_structured_result(result: dict[str, Any], sample: Sample) -> None:
-    """Perform semantic checks beyond provider-side JSON Schema decoding."""
+def validate_structured_result(result: dict[str, Any], sample: Sample) -> list[str]:
+    """Return non-blocking diagnostics beyond provider-side JSON decoding.
+
+    LogiCAM's final answer remains authoritative. These checks must never turn an
+    otherwise parseable answer into an evaluation failure.
+    """
+    warnings: list[str] = []
     spec = _spec(sample.symbol)
     if set(result) != set(RETURN_EXAMPLE):
         missing = sorted(set(RETURN_EXAMPLE) - set(result))
         extra = sorted(set(result) - set(RETURN_EXAMPLE))
-        raise StructuredConsistencyError(
-            f"Top-level JSON keys mismatch; missing={missing}, extra={extra}"
-        )
+        warnings.append(f"Top-level JSON keys mismatch; missing={missing}, extra={extra}")
     if result["schema_version"] != SCHEMA_VERSION:
-        raise StructuredConsistencyError(
-            f"Unexpected schema_version: {result['schema_version']!r}"
-        )
+        warnings.append(f"Unexpected schema_version: {result['schema_version']!r}")
     if result["logic_family"] != spec["label"]:
-        raise StructuredConsistencyError(
-            f"Unexpected logic_family: {result['logic_family']!r}"
-        )
+        warnings.append(f"Unexpected logic_family: {result['logic_family']!r}")
     if result["task_type"] != sample.task_type:
-        raise StructuredConsistencyError(
-            f"Unexpected task_type: {result['task_type']!r}"
-        )
+        warnings.append(f"Unexpected task_type: {result['task_type']!r}")
     if result["final_answer"] not in answer_values(sample):
-        raise StructuredConsistencyError(
-            f"Invalid final_answer: {result['final_answer']!r}"
-        )
+        warnings.append(f"Invalid final_answer: {result['final_answer']!r}")
 
     expected_candidates = set(candidate_values(sample))
     evaluations = result["candidate_evaluations"]
     actual_candidates = [item.get("candidate") for item in evaluations]
     if len(actual_candidates) != len(expected_candidates):
-        raise StructuredConsistencyError("candidate_evaluations has the wrong length")
+        warnings.append("candidate_evaluations has the wrong length")
     if set(actual_candidates) != expected_candidates:
-        raise StructuredConsistencyError(
+        warnings.append(
             f"candidate_evaluations mismatch: expected={sorted(expected_candidates)}, "
             f"actual={actual_candidates}"
         )
@@ -306,7 +301,7 @@ def validate_structured_result(result: dict[str, Any], sample: Sample) -> None:
             if item.get("verdict") == "entailed"
         ]
         if entailed != [result["final_answer"]]:
-            raise StructuredConsistencyError(
+            warnings.append(
                 "Multiple-choice result must have exactly one entailed candidate "
                 "matching final_answer"
             )
@@ -317,18 +312,18 @@ def validate_structured_result(result: dict[str, Any], sample: Sample) -> None:
             "unknown": "Unknown",
         }.get(str(evaluations[0].get("verdict")))
         if expected_final != result["final_answer"]:
-            raise StructuredConsistencyError(
+            warnings.append(
                 "Truth-evaluation verdict must agree with final_answer"
             )
 
     steps = result["derivation_steps"]
     if not 1 <= len(steps) <= 12:
-        raise StructuredConsistencyError("derivation_steps must contain 1-12 items")
+        warnings.append("derivation_steps must contain 1-12 items")
     invalid_rules = sorted(
         {str(step.get("rule")) for step in steps} - set(spec["rules"])
     )
     if invalid_rules:
-        raise StructuredConsistencyError(f"Invalid derivation rules: {invalid_rules}")
+        warnings.append(f"Invalid derivation rules: {invalid_rules}")
 
     for field, minimum, maximum in (
         ("visual_facts", 1, 8),
@@ -336,9 +331,10 @@ def validate_structured_result(result: dict[str, Any], sample: Sample) -> None:
     ):
         value = result[field]
         if not isinstance(value, list) or not minimum <= len(value) <= maximum:
-            raise StructuredConsistencyError(
+            warnings.append(
                 f"{field} must contain {minimum}-{maximum} items"
             )
+    return warnings
 
 
 __all__ = [

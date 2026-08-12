@@ -19,9 +19,9 @@ Every response contains:
 PL, FOL, and NM use separate notation instructions and rule catalogs. The schema bounds all
 arrays, which prevents unbounded free-text reconsideration loops.
 
-The runner also checks cross-field consistency. A schema-valid response whose selected answer
-does not match its own candidate verdicts is saved as `inconsistent` with no prediction, rather
-than silently counting a contradictory intermediate statement as an answer.
+Cross-field consistency checks are diagnostic only. To match the original LogiCAM evaluation,
+every parseable schema-valid `final_answer` is scored; disagreements with intermediate candidate
+verdicts are retained in `consistency_warnings` and never suppress the prediction.
 
 ## Commands
 
@@ -52,6 +52,16 @@ Evaluate the full output:
 ```bash
 src/evaluate_logicam_json.sh
 ```
+
+Open the live result dashboard (auto-refresh the browser to read the current JSONL):
+
+```bash
+src/run_dashboard.sh
+# http://127.0.0.1:5060
+```
+
+Choose another smoke or full result file with
+`src/run_dashboard.sh --predictions /absolute/path/to/result.jsonl`.
 
 The runner defaults to RIPO endpoint auto-discovery, one request attempt, two workers, data-URL
 images, temperature 0, and 2,048 output tokens. Configuration lives in the parent `.env`.

@@ -44,7 +44,6 @@ from ripo.configs.core.model import ModelConfig
 from logicam_json import (
     RETURN_EXAMPLE,
     SCHEMA_VERSION,
-    StructuredConsistencyError,
     response_format_for,
     system_prompt_for,
     user_prompt_for,
@@ -164,7 +163,7 @@ def run_one(
         structured = PIVLM.parse(raw_output, return_example=RETURN_EXAMPLE)
         if not isinstance(structured, dict):
             raise TypeError("Structured output is not a JSON object")
-        validate_structured_result(structured, sample)
+        consistency_warnings = validate_structured_result(structured, sample)
         prediction = str(structured["final_answer"]).upper()
         return {
             "id": sample.id,
@@ -175,6 +174,7 @@ def run_one(
             "expected_answer": sample.answer.upper(),
             "correct": prediction == sample.answer.upper(),
             "structured_output": structured,
+            "consistency_warnings": consistency_warnings,
             "output": raw_output,
             "schema_version": SCHEMA_VERSION,
             "method": "logicam_json",
@@ -188,9 +188,6 @@ def run_one(
         }
     except FileNotFoundError as error:
         status = "skipped_missing_image"
-        error_text = f"{type(error).__name__}: {error}"
-    except StructuredConsistencyError as error:
-        status = "inconsistent"
         error_text = f"{type(error).__name__}: {error}"
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
         status = "invalid_json"
@@ -414,7 +411,7 @@ def main() -> None:
     def status_text() -> str:
         return (
             f"ok:{counters['completed']} invalid:{counters['invalid_json']} "
-            f"inconsistent:{counters['inconsistent']} failed:{counters['failed']} "
+            f"failed:{counters['failed']} "
             f"missing:{counters['skipped_missing_image']}"
         )
 
