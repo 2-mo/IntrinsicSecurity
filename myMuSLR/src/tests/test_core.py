@@ -6,15 +6,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from evaluate import (
+from evaluation.evaluate import (
     build_summary,
     compact_domain_markdown,
     compact_domain_row,
     paper_table_rows,
 )
-from muslr import Sample, load_jsonl, load_samples, parse_answer, parse_template_content, run_samples
-from reasoning_metrics import generated_steps, reasoning_pairs
-from ripo_batch import to_ripo_messages
+from evaluation.reasoning_metrics import generated_steps, reasoning_pairs
+from muslr_core.ripo_batch import to_ripo_messages
+from muslr_core.runtime import Sample, load_jsonl, load_samples, parse_answer, parse_template_content, run_samples
 
 
 class MuSLRTests(unittest.TestCase):

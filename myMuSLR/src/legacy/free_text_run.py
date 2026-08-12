@@ -10,11 +10,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from muslr import CompletionClient, load_samples, metadata_for_samples, run_samples, selected_samples
-from ripo_batch import RipoBatchClient
+from muslr_core.ripo_batch import RipoBatchClient
+from muslr_core.runtime import CompletionClient, load_samples, metadata_for_samples, run_samples, selected_samples
 
 
-WORKSPACE = Path(__file__).resolve().parent
+WORKSPACE = Path(__file__).resolve().parents[2]
 load_dotenv(WORKSPACE / ".env")
 
 

@@ -9,7 +9,10 @@ JSON interface demonstrated in `02_pi_engine_text_inference.ipynb`, section 5.
 src/
 ├── baseline_json/       official few-shot baseline + minimal JSON contract
 ├── logicam_json/        official LogiCAM few-shot prompts + minimal JSON wrapper
+├── muslr_core/          shared dataset, checkpoint, parsing, and RIPO utilities
+├── evaluation/          metrics, comparisons, and publication tables
 ├── result_dashboard/    interactive result inspection page
+├── legacy/              archived free-text runners and superseded dashboard
 ├── scripts/             run, evaluate, and dashboard shell entry points
 └── tests/               schema and prompt contract tests
 ```

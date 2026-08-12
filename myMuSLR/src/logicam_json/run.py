@@ -50,7 +50,7 @@ from logicam_json.schema import (
     problem_text,
     response_format_for,
 )
-from muslr import (
+from muslr_core.runtime import (
     Sample,
     load_jsonl,
     load_samples,

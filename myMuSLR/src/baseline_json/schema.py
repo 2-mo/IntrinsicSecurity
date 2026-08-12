@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from muslr import Sample
+from muslr_core.runtime import Sample
 
 SCHEMA_VERSION = "baseline-json-v1"
 RETURN_EXAMPLE = {"reasoning": "", "final_answer": ""}

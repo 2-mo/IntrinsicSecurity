@@ -13,8 +13,8 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from muslr import Sample, load_jsonl, load_samples, sample_index
-from reasoning_metrics import compute_reasoning_metrics
+from evaluation.reasoning_metrics import compute_reasoning_metrics
+from muslr_core.runtime import Sample, load_jsonl, load_samples, sample_index
 
 
 PAPER_DOMAINS = (

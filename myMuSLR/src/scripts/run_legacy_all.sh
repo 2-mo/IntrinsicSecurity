@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-WORKSPACE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENV_FILE="$WORKSPACE/.env"
 PYTHON="$WORKSPACE/.venv/bin/python"
 
@@ -18,4 +18,5 @@ if [[ ! -x "$PYTHON" ]]; then
   exit 1
 fi
 
-exec "$PYTHON" "$WORKSPACE/run_all.py" "$@"
+export PYTHONPATH="$WORKSPACE/src:$WORKSPACE${PYTHONPATH:+:$PYTHONPATH}"
+exec "$PYTHON" -m legacy.run_all "$@"

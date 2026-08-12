@@ -17,7 +17,8 @@ DATA="${MUSLR_DATA:-/data1/nemo/data/MuSLR}"
 OUTPUT_DIR="${MUSLR_OUTPUT_DIR:-/data1/nemo/my_projects/IntrinsicSecurity/outputs}"
 PREDICTIONS="${MUSLR_BASELINE_JSON_OUTPUT:-$OUTPUT_DIR/muslr_baseline_json_qwen3vl8b.jsonl}"
 
-exec "$PYTHON" "$WORKSPACE/evaluate.py" \
+export PYTHONPATH="$WORKSPACE/src:$WORKSPACE${PYTHONPATH:+:$PYTHONPATH}"
+exec "$PYTHON" -m evaluation.evaluate \
   --data "$DATA" \
   --predictions "$PREDICTIONS" \
   --model "Qwen3-VL-8B + Baseline-JSON" \

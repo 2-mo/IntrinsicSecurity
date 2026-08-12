@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from baseline_json.schema import problem_text, response_format_for, system_prompt
-from muslr import Sample
+from muslr_core.runtime import Sample
 
 
 def sample(*, choices: bool = True) -> Sample:

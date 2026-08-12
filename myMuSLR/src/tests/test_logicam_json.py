@@ -5,7 +5,7 @@ from pathlib import Path
 
 from logicam_json.run import template_path
 from logicam_json.schema import problem_text, response_format_for
-from muslr import Sample
+from muslr_core.runtime import Sample
 
 
 def sample(symbol: str = "pl", *, choices: bool = True) -> Sample:

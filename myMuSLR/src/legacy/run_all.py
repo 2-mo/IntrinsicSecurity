@@ -16,10 +16,9 @@ from rich.panel import Panel
 from rich.table import Table
 
 
-WORKSPACE = Path(__file__).resolve().parent
+WORKSPACE = Path(__file__).resolve().parents[2]
 ENV_FILE = WORKSPACE / ".env"
 PYTHON = WORKSPACE / ".venv" / "bin" / "python"
-RUNNER = WORKSPACE / "run.py"
 console = Console()
 
 
@@ -100,7 +99,8 @@ def main() -> None:
             command = [
                 str(PYTHON),
                 "-u",
-                str(RUNNER),
+                "-m",
+                "legacy.free_text_run",
                 "--method",
                 method,
                 "--max-tokens",

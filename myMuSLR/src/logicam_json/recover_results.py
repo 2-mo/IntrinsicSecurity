@@ -13,7 +13,7 @@ WORKSPACE = Path(__file__).resolve().parents[2]
 if str(WORKSPACE) not in sys.path:
     sys.path.insert(0, str(WORKSPACE))
 
-from muslr import load_jsonl, load_samples  # noqa: E402
+from muslr_core.runtime import load_jsonl, load_samples  # noqa: E402
 
 
 def main() -> None:

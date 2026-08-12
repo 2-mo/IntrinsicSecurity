@@ -21,7 +21,7 @@ load_dotenv(WORKSPACE / ".env", override=False)
 if str(WORKSPACE) not in sys.path:
     sys.path.insert(0, str(WORKSPACE))
 
-from muslr import Sample, load_jsonl, load_samples  # noqa: E402
+from muslr_core.runtime import Sample, load_jsonl, load_samples  # noqa: E402
 
 
 def _existing_default_predictions() -> Path:

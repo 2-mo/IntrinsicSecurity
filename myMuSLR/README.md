@@ -1,133 +1,99 @@
-# MuSLR 本地推理
+# MuSLR local inference
 
-结构化 JSON 版 LogiCAM（Qwen3-VL-8B、RIPO endpoint 自动发现）见
-[`src/README.md`](src/README.md)。
+Qwen3-VL-8B experiments for MuSLR using the RIPO OpenAI-compatible endpoint.
+The active experiments use JSON Schema structured output; older free-text code is
+kept separately for reproducibility.
 
-本目录使用 RIPO 的 `PIVLMConfig + PIVLMPool + run_batch` 调用本地
-OpenAI-compatible vLLM 服务，运行 MuSLR baseline 或 LogiCAM 提示词。默认配置已经对应
-当前机器：
+## Project layout
 
-- 工作目录：`/data1/nemo/my_projects/IntrinsicSecurity/myMuSLR`
-- 数据集：`/data1/nemo/data/MuSLR`
-- 官方提示词：`/data1/nemo/ex_methods/MuSLR/prompts`
-- RIPO：`/data1/nemo/my_projects/RIPO`
-- 输出目录：`/data1/nemo/my_projects/IntrinsicSecurity/outputs`
-- vLLM endpoint：`http://127.0.0.1:22000/v1`
+```text
+myMuSLR/
+├── .env.example             versioned path and runtime configuration
+├── requirements.txt         local `.venv` dependencies
+├── README.md
+└── src/
+    ├── baseline_json/       official baseline prompt + minimal JSON wrapper
+    ├── logicam_json/        official LogiCAM prompts + minimal JSON wrapper
+    ├── muslr_core/          dataset, images, parsing, checkpoints, RIPO adapter
+    ├── evaluation/          metrics, reports, comparisons, paper tables
+    ├── result_dashboard/    interactive result browser
+    ├── legacy/              archived free-text runners and old dashboard
+    ├── scripts/             supported shell entry points
+    └── tests/               all project tests
+```
 
-## 环境
+Generated predictions and reports are stored outside this repository at
+`/data1/nemo/my_projects/IntrinsicSecurity/outputs`.
 
-项目环境位于本目录的 `.venv`：
+## Environment and configuration
 
 ```bash
 cd /data1/nemo/my_projects/IntrinsicSecurity/myMuSLR
 source .venv/bin/activate
 ```
 
-如需重建环境：
+Edit `.env` to change dataset, model endpoint, output paths, token limits, or
+worker counts. `.env.example` documents every active option.
+
+## Active JSON experiments
+
+Run or resume Baseline-JSON:
 
 ```bash
-uv venv .venv --python 3.12
-uv pip install --python .venv/bin/python -r requirements.txt
+src/scripts/run_baseline_json.sh
+src/scripts/evaluate_baseline_json.sh
 ```
 
-## 修改配置
-
-运行参数集中在 `.env`，可直接编辑。`.env.example` 是可提交的模板，真实 `.env` 已被
-Git 忽略。系统环境变量优先于 `.env`，命令行参数优先于两者。
-
-常用项：
-
-```dotenv
-MUSLR_DATA=/data1/nemo/data/MuSLR
-MUSLR_OUTPUT_DIR=/data1/nemo/my_projects/IntrinsicSecurity/outputs
-RIPO_ROOT=/data1/nemo/my_projects/RIPO
-RIPO_ENDPOINTS=http://127.0.0.1:22000/v1
-RIPO_MODEL=anom-pi
-RIPO_IMAGE_URL_MODE=data
-```
-
-`RIPO_IMAGE_URL_MODE=data` 会把本地图像编码进请求，不要求 vLLM 的
-`--allowed-local-media-path` 覆盖 MuSLR 数据目录；当前服务配置应保留此值。
-
-## 运行
-
-### tmux 中顺序运行 baseline 和 LogiCAM
-
-推荐直接使用一键脚本：
+Run or resume the audited LogiCAM-JSON v2:
 
 ```bash
-cd /data1/nemo/my_projects/IntrinsicSecurity/myMuSLR
-tmux new -s muslr
-./run_all.sh
+src/scripts/run_logicam_json.sh
+src/scripts/evaluate_logicam_json.sh
 ```
 
-脚本使用 Rich 显示当前阶段、样本进度、状态计数和耗时。它会先跑 baseline，再跑
-LogiCAM，并分别保存：
+Each runner uses Rich completed/total progress, temperature 0, one request
+attempt, incremental JSONL checkpoints, and automatic endpoint discovery.
 
-```text
-/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_baseline.jsonl
-/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_logicam.jsonl
-```
-
-按 `Ctrl-b`、再按 `d` 可退出 tmux 而不中止任务，之后用
-`tmux attach -t muslr` 返回。脚本支持 checkpoint 续跑；中断后重新执行同一命令即可。
-
-两种方法的输出长度可在 `.env` 中分别调整：
-
-```dotenv
-MUSLR_BASELINE_MAX_TOKENS=2048
-MUSLR_LOGICAM_MAX_TOKENS=4096
-```
-
-### 分别运行
-
-先只检查路径、数据和样本选择，不调用模型：
+Start the result dashboard:
 
 ```bash
-.venv/bin/python run.py --dry-run
+src/scripts/run_dashboard.sh
+# http://127.0.0.1:5060
 ```
 
-跑一条样本验证服务：
+Detailed experiment contracts and smoke-test examples are in
+[`src/README.md`](src/README.md). The LogiCAM reproduction audit is in
+[`src/logicam_json/AUDIT.md`](src/logicam_json/AUDIT.md).
+
+## Evaluation modules
+
+The shell scripts above are the normal entry points. Modules can also be called
+directly when custom paths are needed:
 
 ```bash
-.venv/bin/python run.py --limit 1 \
-  --output /data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_smoke.jsonl
+PYTHONPATH=src:. .venv/bin/python -m evaluation.evaluate --help
+PYTHONPATH=src:. .venv/bin/python -m evaluation.compare --help
+PYTHONPATH=src:. .venv/bin/python -m evaluation.paper_comparison --help
 ```
 
-跑完整 baseline：
+## Legacy free-text reproduction
+
+The previous free-text baseline and LogiCAM code remains under `src/legacy/`.
+It is not used by the active JSON experiments.
 
 ```bash
-.venv/bin/python run.py
+# Validate both legacy methods
+src/scripts/run_legacy_all.sh --dry-run
+
+# Run one legacy method directly
+PYTHONPATH=src:. .venv/bin/python -m legacy.free_text_run --method baseline
 ```
 
-默认输出：
+`src/legacy/dashboard.py` is the superseded, path-specific comparison dashboard;
+use `src/scripts/run_dashboard.sh` for current results.
 
-```text
-/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_baseline.jsonl
-/data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_baseline.jsonl.meta.json
-```
-
-跑完整 LogiCAM：
+## Tests
 
 ```bash
-.venv/bin/python run.py --method logicam
-```
-
-输出采用逐条追加的 JSONL checkpoint。重复执行会跳过已有结果；只重跑失败或未解析项：
-
-```bash
-.venv/bin/python run.py --retry-statuses failed,unparsed
-```
-
-如果启用了多个 endpoint，在 `.env` 中用逗号分隔，并相应提高 worker 数：
-
-```dotenv
-RIPO_ENDPOINTS=http://127.0.0.1:22000/v1,http://127.0.0.1:22001/v1
-MUSLR_WORKERS=2
-```
-
-## 测试
-
-```bash
-PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -v
+PYTHONPATH=src:. .venv/bin/python -m unittest discover -s src/tests -v
 ```

@@ -50,7 +50,7 @@ from baseline_json.schema import (  # noqa: E402
     response_format_for,
     system_prompt,
 )
-from muslr import (  # noqa: E402
+from muslr_core.runtime import (  # noqa: E402
     Sample,
     load_jsonl,
     load_samples,

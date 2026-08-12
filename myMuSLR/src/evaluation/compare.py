@@ -12,8 +12,8 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from evaluate import PAPER_DOMAINS, PAPER_SYMBOLS
-from muslr import load_jsonl, load_samples, sample_index
+from evaluation.evaluate import PAPER_DOMAINS, PAPER_SYMBOLS
+from muslr_core.runtime import load_jsonl, load_samples, sample_index
 
 
 def parsed_by_id(path: Path) -> dict[str, dict[str, Any]]:
