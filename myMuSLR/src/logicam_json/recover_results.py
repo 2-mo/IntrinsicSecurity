@@ -19,7 +19,7 @@ from muslr_core.runtime import load_jsonl, load_samples  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("predictions", type=Path)
-    parser.add_argument("--data", type=Path, default=Path("/data1/nemo/data/MuSLR"))
+    parser.add_argument("--data", type=Path, default=Path(__file__).resolve().parents[2] / "data")
     args = parser.parse_args()
 
     path = args.predictions.resolve()

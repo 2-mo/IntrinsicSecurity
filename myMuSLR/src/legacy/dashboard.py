@@ -18,7 +18,7 @@ from muslr_core.runtime import Sample, load_jsonl, load_samples, sample_index
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUTS = ROOT / "outputs"
-DATA_PATH = Path("/data4/r1/workspace/cwork/datasets/MuSLR")
+DATA_PATH = ROOT / "data"
 
 BASELINE_PREDICTIONS = OUTPUTS / "baseline_ripo_3gpu.jsonl"
 LOGICAM_PREDICTIONS = OUTPUTS / "logicam_ripo_3gpu.jsonl"

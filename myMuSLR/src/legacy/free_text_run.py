@@ -31,7 +31,7 @@ def env_float(name: str, default: float) -> float:
 
 
 def default_template_dir() -> Path:
-    return env_path("MUSLR_PROMPT_DIR", "/data1/nemo/ex_methods/MuSLR/prompts")
+    return env_path("MUSLR_PROMPT_DIR", WORKSPACE / "prompts")
 
 
 def default_local_media_root() -> Path:
@@ -68,7 +68,7 @@ def main() -> None:
     parser.add_argument(
         "--data",
         type=Path,
-        default=env_path("MUSLR_DATA", "/data1/nemo/data/MuSLR"),
+        default=env_path("MUSLR_DATA", WORKSPACE / "data"),
         help="MuSLR metadata file or dataset directory.",
     )
     parser.add_argument(
@@ -107,7 +107,7 @@ def main() -> None:
     parser.add_argument(
         "--ripo-root",
         type=Path,
-        default=env_path("RIPO_ROOT", "/data1/nemo/my_projects/RIPO"),
+        default=env_path("RIPO_ROOT", WORKSPACE.parent / "RIPO"),
     )
     parser.add_argument(
         "--ripo-image-url-mode",
@@ -164,7 +164,7 @@ def main() -> None:
         method_variable = f"MUSLR_{args.method.upper()}_MAX_TOKENS"
         args.max_tokens = env_int(method_variable, fallback_max_tokens)
     if args.output is None:
-        output_dir = env_path("MUSLR_OUTPUT_DIR", WORKSPACE.parent / "outputs")
+        output_dir = env_path("MUSLR_OUTPUT_DIR", WORKSPACE / "outputs")
         args.output = output_dir / f"muslr_{args.method}.jsonl"
 
     if args.workers < 1:

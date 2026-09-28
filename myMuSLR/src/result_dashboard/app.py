@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, render_template, send_file
 
 WORKSPACE = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = WORKSPACE.parent
 load_dotenv(WORKSPACE / ".env", override=False)
 if str(WORKSPACE) not in sys.path:
     sys.path.insert(0, str(WORKSPACE))
@@ -33,7 +32,7 @@ def _existing_default_predictions() -> Path:
     if configured and Path(configured).is_file():
         return Path(configured).resolve()
 
-    output_dir = Path(os.getenv("MUSLR_OUTPUT_DIR", PROJECT_ROOT / "outputs"))
+    output_dir = Path(os.getenv("MUSLR_OUTPUT_DIR", WORKSPACE / "outputs"))
     candidates = sorted(
         output_dir.glob("muslr_logicam_json*.jsonl"),
         key=lambda path: path.stat().st_mtime,
@@ -221,8 +220,8 @@ def create_app(predictions_path: Path, dataset_path: Path) -> Flask:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--predictions", type=Path, default=None, help="LogiCAM-JSON JSONL file")
-    parser.add_argument("--data", type=Path, default=Path(os.getenv("MUSLR_DATA", "/data1/nemo/data/MuSLR")))
-    parser.add_argument("--host", default=os.getenv("MUSLR_JSON_DASHBOARD_HOST", "0.0.0.0"))
+    parser.add_argument("--data", type=Path, default=Path(os.getenv("MUSLR_DATA", WORKSPACE / "data")))
+    parser.add_argument("--host", default=os.getenv("MUSLR_JSON_DASHBOARD_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.getenv("MUSLR_JSON_DASHBOARD_PORT", "5060")))
     parser.add_argument("--debug", action="store_true")
     return parser.parse_args()

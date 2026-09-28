@@ -30,7 +30,7 @@ from rich.progress import (
 
 WORKSPACE = Path(__file__).resolve().parents[2]
 load_dotenv(WORKSPACE / ".env", override=False)
-RIPO_ROOT = Path(os.environ.get("RIPO_ROOT", "/data1/nemo/my_projects/RIPO"))
+RIPO_ROOT = Path(os.environ.get("RIPO_ROOT", WORKSPACE.parent / "RIPO")).expanduser()
 for source_root in (WORKSPACE, RIPO_ROOT / "src"):
     source_text = str(source_root.resolve())
     if source_text not in sys.path:
@@ -311,13 +311,13 @@ def write_metadata(
 def main() -> None:
     default_output_dir = env_path(
         "MUSLR_OUTPUT_DIR",
-        "/data1/nemo/my_projects/IntrinsicSecurity/outputs",
+        WORKSPACE / "outputs",
     )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--data",
         type=Path,
-        default=env_path("MUSLR_DATA", "/data1/nemo/data/MuSLR"),
+        default=env_path("MUSLR_DATA", WORKSPACE / "data"),
     )
     parser.add_argument(
         "--output",
@@ -330,7 +330,7 @@ def main() -> None:
     parser.add_argument(
         "--template-dir",
         type=Path,
-        default=env_path("MUSLR_PROMPT_DIR", "/data1/nemo/ex_methods/MuSLR/prompts"),
+        default=env_path("MUSLR_PROMPT_DIR", WORKSPACE / "prompts"),
     )
     parser.add_argument(
         "--media-root",

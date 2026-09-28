@@ -31,7 +31,7 @@ not add a rule enum, step limit, formalization template, or consistency gate.
 Validate configuration without contacting the model:
 
 ```bash
-cd /data1/nemo/my_projects/IntrinsicSecurity/myMuSLR
+cd /path/to/myMuSLR
 src/scripts/run_baseline_json.sh --dry-run
 ```
 
@@ -41,7 +41,7 @@ Run a separate 10-sample smoke test:
 src/scripts/run_baseline_json.sh \
   --limit 10 \
   --no-resume \
-  --output /data1/nemo/my_projects/IntrinsicSecurity/outputs/muslr_baseline_json_smoke.jsonl
+  --output outputs/muslr_baseline_json_smoke.jsonl
 ```
 
 Run all 1,093 samples with checkpoint resume, then evaluate:

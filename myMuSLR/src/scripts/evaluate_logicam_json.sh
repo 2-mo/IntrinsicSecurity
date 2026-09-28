@@ -13,8 +13,8 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-DATA="${MUSLR_DATA:-/data1/nemo/data/MuSLR}"
-OUTPUT_DIR="${MUSLR_OUTPUT_DIR:-/data1/nemo/my_projects/IntrinsicSecurity/outputs}"
+DATA="${MUSLR_DATA:-$WORKSPACE/data}"
+OUTPUT_DIR="${MUSLR_OUTPUT_DIR:-$WORKSPACE/outputs}"
 PREDICTIONS="${MUSLR_LOGICAM_JSON_OUTPUT:-$OUTPUT_DIR/muslr_logicam_json_v2_qwen3vl8b.jsonl}"
 
 export PYTHONPATH="$WORKSPACE/src:$WORKSPACE${PYTHONPATH:+:$PYTHONPATH}"

@@ -1,96 +1,89 @@
 # MuSLR local inference
 
-Qwen3-VL-8B experiments for MuSLR using the RIPO OpenAI-compatible endpoint.
-The active experiments use JSON Schema structured output; older free-text code is
-kept separately for reproducibility.
+Qwen3-VL-8B experiments on MuSLR through a RIPO OpenAI-compatible endpoint.
+The current runners use JSON Schema responses. Older free-text code is kept in
+`src/legacy/` for reproduction.
 
-## Project layout
+## What this package contains
 
-```text
-myMuSLR/
-├── .env.example             versioned path and runtime configuration
-├── requirements.txt         local `.venv` dependencies
-├── README.md
-└── src/
-    ├── baseline_json/       official baseline prompt + minimal JSON wrapper
-    ├── logicam_json/        official LogiCAM prompts + minimal JSON wrapper
-    ├── muslr_core/          dataset, images, parsing, checkpoints, RIPO adapter
-    ├── evaluation/          metrics, reports, comparisons, paper tables
-    ├── result_dashboard/    interactive result browser
-    ├── legacy/              archived free-text runners and old dashboard
-    ├── scripts/             supported shell entry points
-    └── tests/               all project tests
-```
+`src/baseline_json/` and `src/logicam_json/` contain the two active runners.
+`src/muslr_core/` contains shared dataset and inference code. `src/evaluation/`
+produces metrics and reports. `src/result_dashboard/` browses results.
+`src/scripts/` contains shell entry points; `src/tests/` contains local tests.
 
-Generated predictions and reports are stored outside this repository at
-`/data1/nemo/my_projects/IntrinsicSecurity/outputs`.
+This source package does not include MuSLR data, official prompt files, model
+weights, RIPO, predictions, or a Python environment. Obtain the dataset and
+official prompts from the [MuSLR project](https://github.com/Aiden0526/MuSLR)
+and install [RIPO](https://github.com/2-mo/RIPO) separately. This code was
+validated against RIPO commit `ed37a8770c522cee0a2d8a4b8b65f0ba6cd3b8bc`.
+RIPO later reorganized these APIs, so use that commit for reproduction. The
+runner imports `pi_engine` and `ripo` from `RIPO_ROOT/src`; its Python
+environment must also have RIPO's runtime dependencies installed.
 
-## Environment and configuration
+## Setup
+
+First check out the compatible RIPO version:
 
 ```bash
-cd /data1/nemo/my_projects/IntrinsicSecurity/myMuSLR
-source .venv/bin/activate
+git clone https://github.com/2-mo/RIPO.git
+git -C RIPO checkout ed37a8770c522cee0a2d8a4b8b65f0ba6cd3b8bc
 ```
 
-Edit `.env` to change dataset, model endpoint, output paths, token limits, or
-worker counts. `.env.example` documents every active option.
+From the extracted `myMuSLR` directory, with Python 3.12:
 
-## Active JSON experiments
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -e /absolute/path/to/RIPO
+cp .env.example .env
+```
 
-Run or resume Baseline-JSON:
+Use the full path to the checkout above. Install or run your model endpoint
+following that RIPO revision's setup guide.
+
+Edit `.env` to set `MUSLR_DATA`, `MUSLR_PROMPT_DIR`, `RIPO_ROOT`, endpoint,
+and served model name. Use absolute paths. `MUSLR_DATA` must point to the
+downloaded MuSLR directory containing `metadata.csv` and `images/`.
+`MUSLR_PROMPT_DIR` must contain `baseline/baseline_CoT.txt` and
+`logicam/prompt.txt` plus `logicam/prompt_fol.txt`. Keep API keys in `.env`;
+the file is ignored by Git.
+
+The endpoint must support image input and `json_schema` response format.
+Set the two `*_ENDPOINTS` values to `auto` only when RIPO endpoint discovery
+is running. Output defaults to `myMuSLR/outputs/` and is ignored by Git.
+
+## Run
+
+Check local inputs without a model request:
+
+```bash
+src/scripts/run_baseline_json.sh --dry-run --limit 1
+src/scripts/run_logicam_json.sh --dry-run --limit 1
+```
+
+Run and evaluate each method:
 
 ```bash
 src/scripts/run_baseline_json.sh
 src/scripts/evaluate_baseline_json.sh
-```
-
-Run or resume the audited LogiCAM-JSON v2:
-
-```bash
 src/scripts/run_logicam_json.sh
 src/scripts/evaluate_logicam_json.sh
 ```
 
-Each runner uses Rich completed/total progress, temperature 0, one request
-attempt, incremental JSONL checkpoints, and automatic endpoint discovery.
+The runners use temperature 0, one request attempt, incremental JSONL
+checkpoints, and resume by default. Set `--output` for a separate experiment;
+use `--no-resume` to restart one. Evaluation may download pretrained models
+for optional reasoning metrics on first use.
 
-Start the result dashboard:
+Browse LogiCAM results after running inference:
 
 ```bash
 src/scripts/run_dashboard.sh
 # http://127.0.0.1:5060
 ```
 
-Detailed experiment contracts and smoke-test examples are in
-[`src/README.md`](src/README.md). The LogiCAM reproduction audit is in
-[`src/logicam_json/AUDIT.md`](src/logicam_json/AUDIT.md).
-
-## Evaluation modules
-
-The shell scripts above are the normal entry points. Modules can also be called
-directly when custom paths are needed:
-
-```bash
-PYTHONPATH=src:. .venv/bin/python -m evaluation.evaluate --help
-PYTHONPATH=src:. .venv/bin/python -m evaluation.compare --help
-PYTHONPATH=src:. .venv/bin/python -m evaluation.paper_comparison --help
-```
-
-## Legacy free-text reproduction
-
-The previous free-text baseline and LogiCAM code remains under `src/legacy/`.
-It is not used by the active JSON experiments.
-
-```bash
-# Validate both legacy methods
-src/scripts/run_legacy_all.sh --dry-run
-
-# Run one legacy method directly
-PYTHONPATH=src:. .venv/bin/python -m legacy.free_text_run --method baseline
-```
-
-`src/legacy/dashboard.py` is the superseded, path-specific comparison dashboard;
-use `src/scripts/run_dashboard.sh` for current results.
+More details: [experiment contracts](src/README.md) and
+[LogiCAM audit](src/logicam_json/AUDIT.md).
 
 ## Tests
 

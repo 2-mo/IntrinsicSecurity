@@ -160,7 +160,7 @@ def _rows_for_ours() -> list[dict[str, Any]]:
 
 
 def _dataset_counts() -> Counter[tuple[str, str]]:
-    data_path = Path(os.environ.get("MUSLR_DATA", "/data1/nemo/data/MuSLR"))
+    data_path = Path(os.environ.get("MUSLR_DATA", Path(__file__).resolve().parents[2] / "data"))
     return Counter((sample.symbol.upper(), sample.domain) for sample in load_samples(data_path))
 
 

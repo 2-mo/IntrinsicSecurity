@@ -65,7 +65,7 @@ def main() -> None:
     output_dir = Path(
         os.environ.get(
             "MUSLR_OUTPUT_DIR",
-            "/data1/nemo/my_projects/IntrinsicSecurity/outputs",
+            WORKSPACE / "outputs",
         )
     ).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
