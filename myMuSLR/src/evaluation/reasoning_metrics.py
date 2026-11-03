@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
-from muslr import Sample
+from muslr_core.runtime import Sample
 
 
 FINAL_ANSWER_LINE_RE = re.compile(

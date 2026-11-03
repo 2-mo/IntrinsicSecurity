@@ -28,6 +28,7 @@ echo "smoke $(date -Is)" > "$phase_file"
 case "$bench" in
   muslr)
     common=(--data /data4/r1/workspace/cwork/datasets/MuSLR --method baseline
+      --template-dir /data4/r1/workspace/cwork/projects/MuSLR/prompts
       --batch-backend openai --base-url http://127.0.0.1:22100/v1
       --model Intern-S2-Preview --media-mode data-url --workers "$workers" --max-tokens 8192 --timeout 1800)
     .venv/bin/python myMuSLR/run.py "${common[@]}" --limit 6 --output outputs/intern_s2/muslr_smoke/predictions.jsonl

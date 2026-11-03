@@ -24,6 +24,7 @@ from openai import APIConnectionError, APIError, APITimeoutError, OpenAI, RateLi
 import httpx
 from rich.progress import (
     BarColumn,
+    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
     TaskProgressColumn,
@@ -628,6 +629,7 @@ def run_samples(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
+        MofNCompleteColumn(separator="/"),
         TaskProgressColumn(),
         TimeElapsedColumn(),
         TimeRemainingColumn(),
@@ -637,7 +639,8 @@ def run_samples(
         with progress:
             task_id = progress.add_task(
                 f"{method} inference",
-                total=len(pending),
+                total=len(samples),
+                completed=counters["resumed"],
                 status=progress_status(),
             )
             def on_outcome(record: dict[str, Any]) -> None:

@@ -117,6 +117,7 @@ class RipoBatchClient:
         timeout: float,
         retries: int,
         endpoint_concurrency: int,
+        image_url_mode: str,
     ) -> None:
         if not endpoints:
             raise ValueError("At least one RIPO endpoint is required")
@@ -132,7 +133,7 @@ class RipoBatchClient:
             model=model,
             api_key=api_key,
             timeout=timeout,
-            image_url_mode="file",
+            image_url_mode=image_url_mode,
             max_tokens=max_tokens,
             temperature=0,
             max_try=max(1, retries + 1),

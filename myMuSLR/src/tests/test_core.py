@@ -8,10 +8,15 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path
 
-from evaluate import build_summary, paper_table_rows
-from muslr import CompletionClient, Sample, load_jsonl, load_samples, parse_answer, parse_template_content, run_samples
-from reasoning_metrics import generated_steps, reasoning_pairs
-from ripo_batch import to_ripo_messages
+from evaluation.evaluate import (
+    build_summary,
+    compact_domain_markdown,
+    compact_domain_row,
+    paper_table_rows,
+)
+from evaluation.reasoning_metrics import generated_steps, reasoning_pairs
+from muslr_core.ripo_batch import to_ripo_messages
+from muslr_core.runtime import CompletionClient, Sample, load_jsonl, load_samples, parse_answer, parse_template_content, run_samples
 
 
 class MuSLRTests(unittest.TestCase):
@@ -104,6 +109,35 @@ class MuSLRTests(unittest.TestCase):
         rows = paper_table_rows(records, samples, "test-model")
         self.assertEqual(rows[0]["Healthcare"], 50.0)
         self.assertEqual(rows[2]["Finance"], 100.0)
+
+    def test_compact_domain_table_pools_other_samples(self) -> None:
+        samples = {
+            "traffic": Sample("traffic", "traffic", 0, "a.jpg", "traffic", "pl", 2, "", "", [], "TRUE"),
+            "science": Sample("science", "science", 1, "b.jpg", "Science", "pl", 2, "", "", [], "TRUE"),
+            "finance": Sample("finance", "finance", 2, "c.jpg", "finance", "pl", 2, "", "", [], "TRUE"),
+            "other-1": Sample("other-1", "other-1", 3, "d.jpg", "medical", "pl", 2, "", "", [], "TRUE"),
+            "other-2": Sample("other-2", "other-2", 4, "e.jpg", "Sports", "pl", 2, "", "", [], "TRUE"),
+            "other-3": Sample("other-3", "other-3", 5, "f.jpg", "Entertainment", "pl", 2, "", "", [], "TRUE"),
+        }
+        records = [
+            {"id": "traffic", "prediction": "TRUE"},
+            {"id": "science", "prediction": "FALSE"},
+            {"id": "finance", "prediction": "TRUE"},
+            {"id": "other-1", "prediction": "TRUE"},
+            {"id": "other-2", "prediction": "TRUE"},
+            {"id": "other-3", "prediction": "FALSE"},
+        ]
+        row = compact_domain_row(records, samples, "test-method")
+        self.assertEqual(row["Overall"], 66.67)
+        self.assertEqual(row["Traffic"], 100.0)
+        self.assertEqual(row["Science"], 0.0)
+        self.assertEqual(row["Finance"], 100.0)
+        self.assertEqual(row["Others"], 66.67)
+        self.assertEqual(row["Others_samples"], 3)
+        self.assertIn(
+            "| test-method | 66.67 | 100.00 | 0.00 | 100.00 | 66.67 |",
+            compact_domain_markdown(row),
+        )
 
     def test_reasoning_pairs_strip_final_answer_and_keep_reference_order(self) -> None:
         sample = Sample(

@@ -5,15 +5,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from muslr import load_samples
+from muslr_core.runtime import load_samples
 
 
-ROOT = Path(__file__).resolve().parent
-OUTPUTS = ROOT / "outputs"
+WORKSPACE = Path(__file__).resolve().parents[2]
+OUTPUTS = WORKSPACE.parent / "outputs"
 
 DOMAINS = ("Healthcare", "Traffic", "Sports", "Ent.", "Social", "Science", "Finance", "General")
 SYMBOLS = ("PL", "FOL", "NM")
@@ -159,7 +160,7 @@ def _rows_for_ours() -> list[dict[str, Any]]:
 
 
 def _dataset_counts() -> Counter[tuple[str, str]]:
-    data_path = Path("/data4/r1/workspace/cwork/datasets/MuSLR")
+    data_path = Path(os.environ.get("MUSLR_DATA", Path(__file__).resolve().parents[2] / "data"))
     return Counter((sample.symbol.upper(), sample.domain) for sample in load_samples(data_path))
 
 

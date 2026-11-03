@@ -12,13 +12,13 @@ from typing import Any
 
 from flask import Flask, abort, jsonify, render_template_string, send_file, send_from_directory
 
-from muslr import Sample, load_jsonl, load_samples, sample_index
-from paper_comparison import build_comparison, method_label
+from evaluation.paper_comparison import build_comparison, method_label
+from muslr_core.runtime import Sample, load_jsonl, load_samples, sample_index
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 OUTPUTS = ROOT / "outputs"
-DATA_PATH = Path("/data4/r1/workspace/cwork/datasets/MuSLR")
+DATA_PATH = ROOT / "data"
 
 BASELINE_PREDICTIONS = OUTPUTS / "baseline_ripo_3gpu.jsonl"
 LOGICAM_PREDICTIONS = OUTPUTS / "logicam_ripo_3gpu.jsonl"

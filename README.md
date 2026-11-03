@@ -58,8 +58,11 @@ and optional ROUGE-L/BERTScore/ROSCOE reasoning metrics.
 
 ## Checks
 
+MuSLR JSON tests also require the RIPO revision documented in `myMuSLR/README.md`.
+Set `RIPO_ROOT` to that checkout before running the test suite.
+
 ```bash
-PYTHONPATH=myMuSLR .venv/bin/python -m unittest discover -s myMuSLR/tests -v
+PYTHONPATH=myMuSLR/src .venv/bin/python -m unittest discover -s myMuSLR/src/tests -v
 .venv/bin/python -m unittest discover -s myCoTControl -p test_run.py -v
 .venv/bin/python -m unittest discover -s myProcessBench -p test_run.py -v
 ```
