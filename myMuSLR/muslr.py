@@ -14,12 +14,14 @@ import threading
 import time
 import urllib.request
 import uuid
+from urllib.parse import urlsplit
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
 from openai import APIConnectionError, APIError, APITimeoutError, OpenAI, RateLimitError
+import httpx
 from rich.progress import (
     BarColumn,
     Progress,
@@ -435,7 +437,10 @@ class CompletionClient:
     def _client(self) -> OpenAI:
         client = getattr(self.local, "client", None)
         if client is None:
-            client = OpenAI(base_url=self.base_url, api_key=self.api_key, timeout=self.timeout)
+            local_endpoint = urlsplit(self.base_url).hostname in {"127.0.0.1", "localhost", "::1"}
+            http_client = httpx.Client(trust_env=False, timeout=self.timeout) if local_endpoint else None
+            client = OpenAI(base_url=self.base_url, api_key=self.api_key, timeout=self.timeout,
+                            http_client=http_client)
             self.local.client = client
         return client
 
@@ -451,12 +456,20 @@ class CompletionClient:
                 )
                 choice = response.choices[0]
                 usage = response.usage.model_dump() if response.usage else None
+                self.local.reasoning = (
+                    getattr(choice.message, "reasoning_content", None)
+                    or getattr(choice.message, "reasoning", None)
+                    or ""
+                )
                 return choice.message.content or "", usage, choice.finish_reason
             except retryable:
                 if attempt == self.retries:
                     raise
                 time.sleep(min(2**attempt, 8))
         raise RuntimeError("Unreachable")
+
+    def reasoning_content(self) -> str:
+        return getattr(self.local, "reasoning", "")
 
 
 def run_one(
@@ -481,6 +494,8 @@ def run_one(
             local_media_root,
         )
         output, usage, finish_reason = completion_client.complete(content)
+        reasoning_getter = getattr(completion_client, "reasoning_content", None)
+        reasoning = reasoning_getter() if callable(reasoning_getter) else ""
         prediction = parse_answer(output, sample.task_type)
         return {
             "id": sample.id,
@@ -489,6 +504,7 @@ def run_one(
             "status": "completed" if prediction else "unparsed",
             "prediction": prediction,
             "output": output,
+            "reasoning": reasoning,
             "finish_reason": finish_reason,
             "usage": usage,
             "latency_seconds": round(time.monotonic() - started, 3),

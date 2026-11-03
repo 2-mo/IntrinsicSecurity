@@ -76,7 +76,7 @@ def reasoning_pairs(
     pairs: list[dict[str, Any]] = []
     for sample in samples_by_id.values():
         record = predictions.get(sample.id)
-        output = record.get("output") if record else None
+        output = (record.get("reasoning") or record.get("output")) if record else None
         references = reference_steps(sample)
         hypotheses = generated_steps(output) if isinstance(output, str) else []
         if not references or not hypotheses:

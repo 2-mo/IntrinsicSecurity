@@ -190,6 +190,8 @@ def main() -> None:
         if callable(close):
             close()
     print(json.dumps(counters, indent=2))
+    if counters["failed"] or counters["skipped_missing_image"]:
+        raise SystemExit("Inference contains failed requests or missing images; evaluation was not started.")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,13 @@
 .venv/
+.venv-*/
+/.agents/
+/.codex/
+/.aws/
+.env
+.env.*
+!.env.example
+/outputs/*
+!/outputs/.gitkeep
 __pycache__/
 *.py[cod]
 *.egg-info/

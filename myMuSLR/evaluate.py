@@ -647,6 +647,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, help="Optional machine-readable summary JSON path.")
     parser.add_argument("--report", type=Path, help="Optional human-readable Markdown report path.")
     parser.add_argument("--model", default="Qwen3-VL-8B", help="Model label shown in reports.")
+    parser.add_argument("--selected-only", action="store_true",
+                        help="Evaluate only sample_ids selected in the run metadata (for smoke tests).")
     parser.add_argument(
         "--reasoning-metrics",
         action="store_true",
@@ -665,6 +667,12 @@ def main() -> None:
     args = parser.parse_args()
 
     samples_by_id = sample_index(load_samples(args.data))
+    if args.selected_only:
+        _, metadata = _load_run_metadata(args.predictions)
+        ids = set(metadata.get("sample_ids", []))
+        if not ids:
+            parser.error("--selected-only requires nonempty sample_ids in prediction metadata")
+        samples_by_id = {k: v for k, v in samples_by_id.items() if k in ids}
     records = load_jsonl(args.predictions)
     summary = build_summary(
         samples_by_id=samples_by_id,

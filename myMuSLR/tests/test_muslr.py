@@ -2,17 +2,29 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from evaluate import build_summary, paper_table_rows
-from muslr import Sample, load_jsonl, load_samples, parse_answer, parse_template_content, run_samples
+from muslr import CompletionClient, Sample, load_jsonl, load_samples, parse_answer, parse_template_content, run_samples
 from reasoning_metrics import generated_steps, reasoning_pairs
 from ripo_batch import to_ripo_messages
 
 
 class MuSLRTests(unittest.TestCase):
+    def test_local_endpoint_ignores_socks_proxy_environment(self) -> None:
+        with patch.dict(os.environ, {"ALL_PROXY": "socks5://127.0.0.1:9",
+                                     "HTTPS_PROXY": "socks5://127.0.0.1:9"}):
+            adapter = CompletionClient("http://127.0.0.1:22100/v1", "not-needed", "test", 32, 5, 0)
+            client = adapter._client()
+            try:
+                self.assertFalse(client._client.trust_env)
+            finally:
+                client.close()
+
     def test_huggingface_json_fields_are_normalized(self) -> None:
         record = [
             {

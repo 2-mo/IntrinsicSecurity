@@ -1,0 +1,40 @@
+{
+  "repo_id": "Qwen/ProcessBench",
+  "revision": "3bdcd5371ed567559a78f559c01c13a6deee7604",
+  "files": {
+    ".gitattributes": {
+      "bytes": 2461,
+      "sha256": "e7a120ab07b1bc5b486be249e9fc6c83d59448d0093e1dfebe95d1566d9cafc0",
+      "git_blob": "1ef325f1b111266a6b26e0196871bd78baa8c2f3"
+    },
+    "README.md": {
+      "bytes": 1554,
+      "sha256": "525e4455e981213919c574146196258ddb63986c11637116f58d7ba8b990c6f5",
+      "git_blob": "eb959b6d4219b9d137ded2107b041207ee8b7888"
+    },
+    "gsm8k.json": {
+      "bytes": 574343,
+      "sha256": "fb1c59dfd1e83e1c5a48dbe598db27e4bc0b8bc524a09445f2d4b69178f61349",
+      "git_blob": "e0de3bcd65fd4dcf0cfd0ec68c57d84336beabe8",
+      "samples": 400
+    },
+    "math.json": {
+      "bytes": 1938778,
+      "sha256": "60cb0d7a69cbec98d43cf50855b9b7e7294599c3c9a24bdd031abd18c3b6b136",
+      "git_blob": "8832b851776f6cc17d44f40e0098e492651ec368",
+      "samples": 1000
+    },
+    "olympiadbench.json": {
+      "bytes": 2808955,
+      "sha256": "e9d801c9f3c03f949adbfa08e90cb21ad85c0b9224bc5e98326f8215c218aa55",
+      "git_blob": "6c8207417429340bbdcbc1f611d328d5d2c5db0c",
+      "samples": 1000
+    },
+    "omnimath.json": {
+      "bytes": 2842872,
+      "sha256": "e8d7cf4512c82168dae2fe48b1718069a3002e7910af1d180a27ee0d9948ba47",
+      "git_blob": "b92528dbf2dcf292a394574bbe5da5dda497dd0c",
+      "samples": 1000
+    }
+  }
+}
