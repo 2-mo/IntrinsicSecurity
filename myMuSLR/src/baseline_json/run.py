@@ -9,6 +9,7 @@ import os
 import sys
 from collections import Counter
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -37,15 +38,13 @@ for source_root in (WORKSPACE, WORKSPACE / "src", RIPO_ROOT / "src"):
 
 from pi_engine.context import msg  # noqa: E402
 from pi_engine.inference import PIVLM  # noqa: E402
-from ripo.agent.client import (  # noqa: E402
-    build_ripo_client_from_config,
-    resolve_model_config,
-)
+from ripo.agent import client as ripo_client  # noqa: E402
 from ripo.configs.core.model import ModelConfig  # noqa: E402
 
 from baseline_json.schema import (  # noqa: E402
     RETURN_EXAMPLE,
     SCHEMA_VERSION,
+    answer_values,
     problem_text,
     response_format_for,
     system_prompt,
@@ -57,6 +56,24 @@ from muslr_core.runtime import (  # noqa: E402
     parse_template_content,
     selected_samples,
 )
+
+
+def resolve_model_config(config: ModelConfig) -> ModelConfig:
+    resolver = getattr(ripo_client, "resolve_model_config", None)
+    if resolver is not None:
+        return resolver(config)
+    if "auto" in config.endpoints:
+        raise ValueError("This RIPO version requires explicit --endpoints")
+    return config
+
+
+def build_ripo_client_from_config(config: ModelConfig, **overrides: Any) -> Any:
+    builder = getattr(ripo_client, "build_ripo_client_from_config", None)
+    if builder is not None:
+        return builder(config, **overrides)
+    options = asdict(config)
+    options["request_seed"] = options.pop("seed")
+    return ripo_client.build_ripo_client(**(options | overrides))
 
 
 def env_int(name: str, default: int) -> int:
@@ -191,9 +208,15 @@ def run_one(
         usage = dict(metadata.usage) if metadata.usage else None
         if usage is not None:
             usage["endpoint"] = metadata.endpoint
-        structured = PIVLM.parse(raw_output, return_example=RETURN_EXAMPLE)
+        structured = json.loads(raw_output)
         if not isinstance(structured, dict):
             raise TypeError("Structured output is not a JSON object")
+        if set(structured) != set(RETURN_EXAMPLE):
+            raise ValueError("JSON output must contain only reasoning and final_answer")
+        if not isinstance(structured["reasoning"], str):
+            raise TypeError("JSON reasoning must be a string")
+        if structured["final_answer"] not in answer_values(sample):
+            raise ValueError("JSON final_answer is not an allowed answer label")
         prediction = str(structured["final_answer"]).upper()
         return {
             "id": sample.id,
@@ -204,6 +227,7 @@ def run_one(
             "expected_answer": sample.answer.upper(),
             "correct": prediction == sample.answer.upper(),
             "structured_output": structured,
+            "reasoning": structured["reasoning"],
             "output": raw_output,
             "schema_version": SCHEMA_VERSION,
             "method": "baseline_json",
