@@ -44,6 +44,12 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+def read_checkpoint(path):
+    # U+2028/U+2029 inside a JSON string are data, not JSONL record boundaries.
+    with path.open(encoding="utf-8") as source:
+        return [json.loads(line) for line in source if line.strip()]
+
+
 def target_letter(sample):
     """Resolve labels without the upstream loader's silent fallback to A."""
     answer = sample["correct_answer"].strip()
@@ -211,8 +217,7 @@ def main():
         return
     rows = {}
     if predictions.exists():
-        for line in predictions.read_text().splitlines():
-            row = json.loads(line)
+        for row in read_checkpoint(predictions):
             rows[row["id"]] = row
     clients = []
     try:

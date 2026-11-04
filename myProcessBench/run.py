@@ -22,7 +22,7 @@ from openai import OpenAI
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from myCoTControl.run import split_reasoning
+from myCoTControl.run import read_checkpoint, split_reasoning
 
 SPLITS = ("gsm8k", "math", "olympiadbench", "omnimath")
 
@@ -130,8 +130,7 @@ def main():
         return
     rows = {}
     if path.exists():
-        for line in path.read_text().splitlines():
-            row = json.loads(line)
+        for row in read_checkpoint(path):
             rows[row["id"]] = row
     pending = [t for t in tasks if rows.get(t["id"], {}).get("status") != "ok"]
     if pending and not args.evaluate_only:

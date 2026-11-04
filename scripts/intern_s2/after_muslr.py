@@ -36,6 +36,9 @@ def tmux(*args):
 
 def stop_server(port, pane=None):
     target = pane or f"{SESSION}:server"
+    if tmux("display-message", "-p", "-t", target, "#{pane_dead}") == "1":
+        print(f"Server pane {target} already exited; nothing to stop", flush=True)
+        return
     pid = int(tmux("display-message", "-p", "-t", target, "#{pane_pid}"))
     root = psutil.Process(pid)
     cmd = root.cmdline()
@@ -112,7 +115,7 @@ def record_transition():
         path = OUTPUT / directory / "predictions.jsonl"
         ids = []
         if path.exists():
-            for line in path.read_text().splitlines():
+            for line in path.open(encoding="utf-8"):
                 row = json.loads(line)
                 if row.get("status") == "ok":
                     ids.append(row["id"])
@@ -124,6 +127,8 @@ def record_transition():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", action="store_true")
+    parser.add_argument("--reuse-server", action="store_true",
+                        help="Resume using the already running dedicated TP2 service")
     args = parser.parse_args()
     if args.plan:
         print(json.dumps({"wait_for": "MuSLR inference and evaluation complete", "deployment": DEPLOYMENT,
@@ -141,12 +146,19 @@ def main():
             summary = json.loads((OUTPUT / "muslr/summary.json").read_text())
             if summary["overall"]["prediction_records"] != 1093 or summary["overall"]["status_counts"].get("failed", 0):
                 raise RuntimeError("MuSLR summary is incomplete or contains failed requests")
-            state("MuSLR complete. Stopping TP4 service and preparing TP2 text-only service")
-            stop_server(22100)
-            wait_free_gpus()
-            command = shlex.join(["env", *[f"{key}={value}" for key, value in DEPLOYMENT.items()],
-                                   "bash", "scripts/intern_s2/serve.sh"])
-            tmux("respawn-pane", "-k", "-t", f"{SESSION}:server", command)
+            if args.reuse_server:
+                pid = int(tmux("display-message", "-p", "-t", f"{SESSION}:server", "#{pane_pid}"))
+                command = psutil.Process(pid).cmdline()
+                if "/data3/Intern-S2-Preview" not in command or "22102" not in command:
+                    raise RuntimeError("Existing server does not match the expected Intern-S2 TP2 endpoint")
+                state("Reusing dedicated TP2 text-only service to resume pending benchmarks")
+            else:
+                state("MuSLR complete. Stopping TP4 service and preparing TP2 text-only service")
+                stop_server(22100)
+                wait_free_gpus()
+                command = shlex.join(["env", *[f"{key}={value}" for key, value in DEPLOYMENT.items()],
+                                       "bash", "scripts/intern_s2/serve.sh"])
+                tmux("respawn-pane", "-k", "-t", f"{SESSION}:server", command)
             state("Starting and validating TP2 service; GPUs 2 and 3 remain available")
             wait_ready_and_probe()
             record_transition()

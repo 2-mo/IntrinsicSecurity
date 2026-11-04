@@ -1,11 +1,22 @@
 """Regression checks for scoring and reasoning-channel handling; no model calls."""
 import unittest
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
-from run import compliance, infer, prepare, split_reasoning, summarize, target_letter
+from run import compliance, infer, prepare, read_checkpoint, split_reasoning, summarize, target_letter
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_checkpoint_unicode_separators_are_preserved_inside_json_strings(self):
+        rows = [{"id": "first", "reasoning": "a\u2028b\u2029c\u0085d"},
+                {"id": "second", "reasoning": "normal"}]
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'predictions.jsonl'
+            path.write_text('\n\n'.join(json.dumps(r, ensure_ascii=False) for r in rows) + '\n')
+            self.assertEqual(read_checkpoint(path), rows)
+
     def test_separate_reasoning_and_final_answer(self):
         self.assertEqual(split_reasoning({"reasoning_content": "Avoiding a word.", "content": "ANSWER: J"}),
                          ("Avoiding a word.", "ANSWER: J", "api_field"))
