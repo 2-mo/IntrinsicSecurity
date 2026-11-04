@@ -10,7 +10,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from muslr_core.ripo_batch import RipoBatchClient
 from muslr_core.runtime import CompletionClient, load_samples, metadata_for_samples, run_samples, selected_samples
 
 
@@ -89,8 +88,8 @@ def main() -> None:
     parser.add_argument(
         "--media-mode",
         choices=("local", "data-url"),
-        default="local",
-        help="Use local file:// image paths by default; data-url is available as a fallback.",
+        default="data-url",
+        help="Use data URLs by default; local paths require a shared server filesystem.",
     )
     parser.add_argument(
         "--local-media-root",
@@ -98,7 +97,7 @@ def main() -> None:
         default=default_local_media_root(),
         help="Directory used to materialize images embedded in official prompts.",
     )
-    parser.add_argument("--batch-backend", choices=("ripo", "openai"), default="ripo")
+    parser.add_argument("--batch-backend", choices=("ripo", "openai"), default="openai")
     parser.add_argument(
         "--endpoints",
         default=os.environ.get("RIPO_ENDPOINTS", "http://127.0.0.1:22000/v1"),
@@ -122,16 +121,16 @@ def main() -> None:
     )
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("OPENAI_BASE_URL", "http://127.0.0.1:22000/v1"),
+        default=os.environ.get("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1"),
     )
     parser.add_argument(
         "--api-key",
         default=os.environ.get(
-            "RIPO_API_KEY",
-            os.environ.get("OPENAI_API_KEY", "EMPTY"),
+            "OPENAI_API_KEY",
+            os.environ.get("RIPO_API_KEY", "EMPTY"),
         ),
     )
-    parser.add_argument("--model", default=os.environ.get("RIPO_MODEL", "anom-pi"))
+    parser.add_argument("--model", default=os.environ.get("OPENAI_MODEL", os.environ.get("RIPO_MODEL", "your-served-model-name")))
     parser.add_argument(
         "--max-tokens",
         type=int,
@@ -225,6 +224,8 @@ def main() -> None:
         return
 
     if args.batch_backend == "ripo":
+        from muslr_core.ripo_batch import RipoBatchClient
+
         client = RipoBatchClient(
             endpoints=endpoints,
             ripo_root=args.ripo_root,

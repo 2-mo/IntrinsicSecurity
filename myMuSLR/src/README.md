@@ -1,7 +1,8 @@
 # MuSLR structured-output experiments
 
-This source tree contains two Qwen3-VL-8B experiments using the RIPO structured
-JSON interface demonstrated in `02_pi_engine_text_inference.ipynb`, section 5.
+This source tree contains two structured JSON experiments using the standalone
+OpenAI-compatible client in `muslr_core/inference.py`. RIPO is optional only
+for the archived free-text batch backend.
 
 ## Layout
 
@@ -9,7 +10,7 @@ JSON interface demonstrated in `02_pi_engine_text_inference.ipynb`, section 5.
 src/
 ├── baseline_json/       official few-shot baseline + minimal JSON contract
 ├── logicam_json/        official LogiCAM few-shot prompts + minimal JSON wrapper
-├── muslr_core/          shared dataset, checkpoint, parsing, and RIPO utilities
+├── muslr_core/          shared data, parsing, HTTP client, and optional legacy adapter
 ├── evaluation/          metrics, comparisons, and publication tables
 ├── result_dashboard/    interactive result inspection page
 ├── legacy/              archived free-text runners and superseded dashboard

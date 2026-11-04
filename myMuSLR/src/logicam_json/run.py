@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run JSON-constrained LogiCAM on MuSLR through the RIPO VLM client."""
+"""Run JSON-constrained LogiCAM on MuSLR through an OpenAI-compatible endpoint."""
 
 from __future__ import annotations
 
@@ -30,23 +30,16 @@ from rich.progress import (
 
 WORKSPACE = Path(__file__).resolve().parents[2]
 load_dotenv(WORKSPACE / ".env", override=False)
-RIPO_ROOT = Path(os.environ.get("RIPO_ROOT", WORKSPACE.parent / "RIPO")).expanduser()
-for source_root in (WORKSPACE, RIPO_ROOT / "src"):
-    source_text = str(source_root.resolve())
-    if source_text not in sys.path:
-        sys.path.insert(0, source_text)
+source_root = str(WORKSPACE / "src")
+if source_root not in sys.path:
+    sys.path.insert(0, source_root)
 
-from pi_engine.context import msg
-from pi_engine.inference import PIVLM
-from ripo.agent.client import (
-    build_ripo_client_from_config,
-    resolve_model_config,
-)
-from ripo.configs.core.model import ModelConfig
+from muslr_core.inference import JSONClient, ModelConfig, image_block
 
 from logicam_json.schema import (
     RETURN_EXAMPLE,
     SCHEMA_VERSION,
+    answer_values,
     problem_text,
     response_format_for,
 )
@@ -142,16 +135,16 @@ def logicam_messages(
     blocks = []
     for block in template_blocks(prompt_path, media_root.resolve()):
         if block.get("type") == "text":
-            blocks.append(msg.text(str(block.get("text", ""))))
+            blocks.append({"type": "text", "text": str(block.get("text", ""))})
             continue
         image_url = block.get("image_url")
         url = image_url.get("url") if isinstance(image_url, dict) else None
         if not isinstance(url, str) or not url.startswith("file://"):
             raise ValueError("Official LogiCAM example image was not materialized locally")
-        blocks.append(msg.image(Path(unquote(urlparse(url).path))))
-    blocks.append(msg.text(problem_text(sample)))
-    blocks.append(msg.image(resolve_image(sample, data_path)))
-    return [msg.user(blocks)], prompt_path
+        blocks.append(image_block(Path(unquote(urlparse(url).path))))
+    blocks.append({"type": "text", "text": problem_text(sample)})
+    blocks.append(image_block(resolve_image(sample, data_path)))
+    return [{"role": "user", "content": blocks}], prompt_path
 
 
 def served_model_roots(
@@ -205,24 +198,26 @@ def run_one(
             max_tokens=max_tokens,
             temperature=0.0,
             response_format=response_format_for(sample),
-            max_try=1,
-            wait_time=0.0,
         )
-        if not metadata.responses:
-            raise RuntimeError("RIPO returned no response")
-        raw_output = PIVLM.text(metadata.responses[0])
+        raw_output = metadata.output
         latency_seconds = metadata.latency_sec
         usage = dict(metadata.usage) if metadata.usage else None
         if usage is not None:
             usage["endpoint"] = metadata.endpoint
-        structured = PIVLM.parse(raw_output, return_example=RETURN_EXAMPLE)
+        structured = json.loads(raw_output)
         if not isinstance(structured, dict):
             raise TypeError("Structured output is not a JSON object")
+        if set(structured) != set(RETURN_EXAMPLE):
+            raise ValueError("JSON output must contain only reasoning_steps and final_answer")
         reasoning_steps = structured["reasoning_steps"]
         if not isinstance(reasoning_steps, list) or not all(
             isinstance(step, str) for step in reasoning_steps
         ):
             raise TypeError("reasoning_steps is not a list of strings")
+        if not 1 <= len(reasoning_steps) <= 16:
+            raise ValueError("reasoning_steps must contain 1 to 16 steps")
+        if structured["final_answer"] not in answer_values(sample):
+            raise ValueError("JSON final_answer is not an allowed answer label")
         prediction = str(structured["final_answer"]).upper()
         return {
             "id": sample.id,
@@ -339,12 +334,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--endpoints",
-        default=os.environ.get("MUSLR_LOGICAM_JSON_ENDPOINTS", "auto"),
-        help="Comma-separated endpoints or 'auto' for RIPO runtime discovery.",
+        default=os.environ.get("MUSLR_LOGICAM_JSON_ENDPOINTS", "http://127.0.0.1:8000/v1"),
+        help="Comma-separated OpenAI-compatible HTTP(S) endpoints including /v1.",
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("MUSLR_LOGICAM_JSON_MODEL", "anom-pi"),
+        default=os.environ.get("MUSLR_LOGICAM_JSON_MODEL", "your-served-model-name"),
     )
     parser.add_argument(
         "--api-key",
@@ -393,12 +388,18 @@ def main() -> None:
         parser.error(f"MuSLR data path does not exist: {args.data}")
     if not args.template_dir.is_dir():
         parser.error(f"Prompt directory does not exist: {args.template_dir}")
-    if not RIPO_ROOT.is_dir():
-        parser.error(f"RIPO root does not exist: {RIPO_ROOT}")
     if args.max_tokens < 1 or args.workers < 1 or args.pool_concurrency < 1:
         parser.error("max-tokens, workers, and pool-concurrency must be positive")
     try:
         raw_endpoints = parse_endpoints(args.endpoints)
+        config = ModelConfig(
+            endpoints=raw_endpoints,
+            model=args.model,
+            api_key=args.api_key,
+            timeout=args.timeout,
+            image_url_mode=args.image_url_mode,
+            pool_concurrency=args.pool_concurrency,
+        )
     except ValueError as error:
         parser.error(str(error))
 
@@ -447,18 +448,6 @@ def main() -> None:
         )
         return
 
-    config = resolve_model_config(
-        ModelConfig(
-            endpoints=raw_endpoints,
-            model=args.model,
-            api_key=args.api_key,
-            timeout=args.timeout,
-            image_url_mode=args.image_url_mode,
-            max_try=1,
-            wait_time=0.0,
-            pool_concurrency=args.pool_concurrency,
-        )
-    )
     roots = served_model_roots(config.endpoints, config.api_key)
     write_metadata(
         metadata_path,
@@ -505,7 +494,7 @@ def main() -> None:
         )
 
     with (
-        build_ripo_client_from_config(
+        JSONClient(
             config,
             max_tokens=args.max_tokens,
             temperature=0.0,

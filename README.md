@@ -27,9 +27,8 @@ bash scripts/intern_s2/serve.sh
 `serve.sh` checks four-GPU communication and serves the BF16 model on port 22100.
 Its NCCL settings bypass the PCIe P2P path that stalled initialization on this host.
 
-Use the project `.venv` for evaluation. CoT-Control and ProcessBench dependencies
-are listed in `myCoTControl/requirements.txt`; MuSLR dependencies are in
-`myMuSLR/requirements.txt`.
+Use the project `.venv` for evaluation. Each runner's dependencies are listed
+in its own `requirements.txt`: `myCoTControl/`, `myProcessBench/`, and `myMuSLR/`.
 
 Run one benchmark, with checkpoint resume and evaluation:
 
@@ -89,8 +88,22 @@ and optional ROUGE-L/BERTScore/ROSCOE reasoning metrics.
 
 ## Checks
 
-MuSLR JSON tests also require the RIPO revision documented in `myMuSLR/README.md`.
-Set `RIPO_ROOT` to that checkout before running the test suite.
+MuSLR JSON runners and tests use a standalone OpenAI-compatible client and do
+not require RIPO. Model deployment remains separate in `scripts/intern_s2/`.
+To share the portable MuSLR client/evaluation package, run
+`python scripts/package_muslr.py`; it writes `outputs/share/myMuSLR-standalone.zip`.
+Recipients set their own endpoint, model, data, and prompt paths following
+`myMuSLR/README.md`. The export excludes this host's deployment scripts and results.
+
+CoT-Control QA and ProcessBench also use direct OpenAI-compatible HTTP requests
+and require no RIPO. `python scripts/package_text_benchmarks.py` exports two
+independent bundles in `outputs/share/`, including their public data and required
+official prompts/code. ProcessBench does not import CoT-Control; both bundles
+include the small `benchmark_common/` utilities. Setup instructions are in
+`myCoTControl/README.md` and `myProcessBench/README.md`. The bundles exclude
+credentials, model weights, results, and host deployment scripts. Configure
+`OPENAI_BASE_URL`, `OPENAI_MODEL`, and `OPENAI_API_KEY` in the extracted root's
+`.env`, or pass explicit CLI arguments. Local model paths are optional provenance.
 
 ```bash
 PYTHONPATH=myMuSLR/src .venv/bin/python -m unittest discover -s myMuSLR/src/tests -v

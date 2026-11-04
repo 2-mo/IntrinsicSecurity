@@ -21,9 +21,14 @@ import sys
 import time
 
 import httpx
+from dotenv import load_dotenv
 from openai import OpenAI
 
 ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT / ".env", override=False)
+sys.path.insert(0, str(ROOT))
+from benchmark_common.runtime import read_checkpoint, split_reasoning
+
 OFFICIAL = ROOT / "datasets/CoT-Control/CoT-Control-QA"
 sys.path.insert(0, str(OFFICIAL))
 from run_cceval import create_prompt_for_sample, get_control_value, load_evaluation_data
@@ -44,12 +49,6 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
-def read_checkpoint(path):
-    # U+2028/U+2029 inside a JSON string are data, not JSONL record boundaries.
-    with path.open(encoding="utf-8") as source:
-        return [json.loads(line) for line in source if line.strip()]
-
-
 def target_letter(sample):
     """Resolve labels without the upstream loader's silent fallback to A."""
     answer = sample["correct_answer"].strip()
@@ -67,21 +66,6 @@ def target_letter(sample):
     return chr(ord("A") + matches[0])
 
 
-def split_reasoning(message):
-    content = message.get("content") or ""
-    reasoning = message.get("reasoning_content") or message.get("reasoning")
-    if isinstance(reasoning, str) and reasoning.strip():
-        return reasoning.strip(), content, "api_field"
-    match = re.search(r"<(think|output_reasoning)>(.*?)</\1>", content, re.S)
-    if match:
-        return match[2].strip(), content[match.end():].strip(), "tagged_content"
-    # Some templates prefill <think>, so decoded generated text has only </think>.
-    if "</think>" in content:
-        reasoning, final = content.split("</think>", 1)
-        return reasoning.removeprefix("<think>").strip(), final.strip(), "prefilled_think"
-    return "", content, "missing"
-
-
 def compliance(mode, reasoning, sample):
     if mode == "baseline" or not reasoning.strip():
         return None
@@ -96,11 +80,12 @@ def compliance(mode, reasoning, sample):
     return GRADE_FUNC_MAP[mode](reasoning)
 
 
-def prepare(model, datasets, modes, limit):
+def prepare(model, datasets, modes, limit, data_dir=None):
     tasks, selection = [], {}
     for dataset in datasets:
         for mode in modes:
-            samples = load_evaluation_data(DATASETS[dataset], False, mode)
+            data_path = data_dir / f"{dataset}_w_keyword.csv" if data_dir is not None else DATASETS[dataset]
+            samples = load_evaluation_data(data_path, False, mode)
             available = len(samples)
             samples = samples[:limit] if limit else samples
             selection[f"{dataset}/{mode}"] = {"eligible": available, "selected": len(samples)}
@@ -176,29 +161,31 @@ def summarize(rows, expected):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default="Intern-S2-Preview")
+    parser.add_argument("--model", default=os.getenv("OPENAI_MODEL", "Intern-S2-Preview"))
     parser.add_argument("--model-path", type=Path,
-                        default=Path("/data3/Intern-S2-Preview"))
-    parser.add_argument("--endpoints", default="http://127.0.0.1:22000/v1")
+                        help="Optional local weights path for provenance/diagnostics; never loaded by this client")
+    parser.add_argument("--endpoints", default=os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1"))
+    parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", os.getenv("LOCAL_LLM_API_KEY", "not-needed")))
+    parser.add_argument("--data-dir", type=Path, default=OFFICIAL / "datasets")
     parser.add_argument("--datasets", nargs="+", choices=DATASETS, default=list(DATASETS))
     parser.add_argument("--modes", nargs="+", choices=MODES, default=["baseline", "word_suppression"])
     parser.add_argument("--limit", type=int, default=3, help="Per dataset/mode; 0 = all")
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--max-tokens", type=int, default=25000)
     parser.add_argument("--timeout", type=float, default=1800)
-    parser.add_argument("--output", type=Path, default=ROOT / "outputs/cot_control/intern_s2_smoke")
+    parser.add_argument("--output", type=Path, default=ROOT / "outputs/cot_control")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--evaluate-only", action="store_true")
     args = parser.parse_args()
-    if args.limit < 0 or args.workers < 1 or args.max_tokens < 1:
-        parser.error("limit >= 0, workers >= 1 and max-tokens >= 1 are required")
+    if args.limit < 0 or args.workers < 1 or args.max_tokens < 1 or args.timeout <= 0:
+        parser.error("limit >= 0, workers >= 1, max-tokens >= 1 and timeout > 0 are required")
     if args.dry_run and args.evaluate_only:
         parser.error("--dry-run and --evaluate-only are mutually exclusive")
     endpoints = [x.strip().rstrip("/") for x in args.endpoints.split(",") if x.strip()]
     if not endpoints:
         parser.error("At least one endpoint is required")
-    tasks, selection = prepare(args.model, args.datasets, args.modes, args.limit)
-    spec = {"model": args.model, "model_path": str(args.model_path),
+    tasks, selection = prepare(args.model, args.datasets, args.modes, args.limit, args.data_dir)
+    spec = {"model": args.model, "model_path": str(args.model_path) if args.model_path else None,
             "max_tokens": args.max_tokens, "temperature": 0,
             "task_hash": digest(tasks), "selection": selection,
             "implementation_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
@@ -225,7 +212,7 @@ def main():
         if not args.evaluate_only and pending:
             for endpoint in endpoints:
                 # Local model traffic must not accidentally use an external proxy.
-                client = OpenAI(base_url=endpoint, api_key=os.getenv("LOCAL_LLM_API_KEY", "not-needed"),
+                client = OpenAI(base_url=endpoint, api_key=args.api_key,
                                 timeout=args.timeout, max_retries=2,
                                 http_client=httpx.Client(trust_env=False, timeout=args.timeout))
                 clients.append(client)
@@ -254,8 +241,8 @@ def main():
     except Exception as error:
         (args.output / "last_error.json").write_text(json.dumps({
             "error": f"{type(error).__name__}: {error}",
-            "model_path_exists": args.model_path.is_dir(),
-            "local_weight_files": len(list(args.model_path.glob("*.safetensors"))) + len(list(args.model_path.glob("*.bin"))),
+            "model_path_exists": args.model_path.is_dir() if args.model_path else None,
+            "local_weight_files": (len(list(args.model_path.glob("*.safetensors"))) + len(list(args.model_path.glob("*.bin")))) if args.model_path else None,
             "endpoints": endpoints,
         }, indent=2) + "\n")
         raise

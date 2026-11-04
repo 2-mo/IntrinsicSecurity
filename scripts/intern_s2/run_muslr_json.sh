@@ -11,7 +11,6 @@ unset ALL_PROXY all_proxy
 export NO_PROXY=127.0.0.1,localhost
 export no_proxy=$NO_PROXY
 export PYTHONPATH="$PWD/myMuSLR/src${PYTHONPATH:+:$PYTHONPATH}"
-export RIPO_ROOT=/data4/r1/workspace/cwork/projects/RIPO
 export PYTHONUNBUFFERED=1
 export TTY_COMPATIBLE=1
 export CUDA_VISIBLE_DEVICES=""

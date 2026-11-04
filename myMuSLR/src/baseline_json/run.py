@@ -9,7 +9,6 @@ import os
 import sys
 from collections import Counter
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -30,16 +29,11 @@ from rich.progress import (
 
 WORKSPACE = Path(__file__).resolve().parents[2]
 load_dotenv(WORKSPACE / ".env", override=False)
-RIPO_ROOT = Path(os.environ.get("RIPO_ROOT", WORKSPACE.parent / "RIPO")).expanduser()
-for source_root in (WORKSPACE, WORKSPACE / "src", RIPO_ROOT / "src"):
-    source_text = str(source_root.resolve())
-    if source_text not in sys.path:
-        sys.path.insert(0, source_text)
+source_root = str(WORKSPACE / "src")
+if source_root not in sys.path:
+    sys.path.insert(0, source_root)
 
-from pi_engine.context import msg  # noqa: E402
-from pi_engine.inference import PIVLM  # noqa: E402
-from ripo.agent import client as ripo_client  # noqa: E402
-from ripo.configs.core.model import ModelConfig  # noqa: E402
+from muslr_core.inference import JSONClient, ModelConfig, image_block
 
 from baseline_json.schema import (  # noqa: E402
     RETURN_EXAMPLE,
@@ -56,24 +50,6 @@ from muslr_core.runtime import (  # noqa: E402
     parse_template_content,
     selected_samples,
 )
-
-
-def resolve_model_config(config: ModelConfig) -> ModelConfig:
-    resolver = getattr(ripo_client, "resolve_model_config", None)
-    if resolver is not None:
-        return resolver(config)
-    if "auto" in config.endpoints:
-        raise ValueError("This RIPO version requires explicit --endpoints")
-    return config
-
-
-def build_ripo_client_from_config(config: ModelConfig, **overrides: Any) -> Any:
-    builder = getattr(ripo_client, "build_ripo_client_from_config", None)
-    if builder is not None:
-        return builder(config, **overrides)
-    options = asdict(config)
-    options["request_seed"] = options.pop("seed")
-    return ripo_client.build_ripo_client(**(options | overrides))
 
 
 def env_int(name: str, default: int) -> int:
@@ -145,16 +121,16 @@ def baseline_messages(
     blocks = []
     for block in baseline_template_blocks(template_path, media_root):
         if block.get("type") == "text":
-            blocks.append(msg.text(str(block.get("text", ""))))
+            blocks.append({"type": "text", "text": str(block.get("text", ""))})
             continue
         image_url = block.get("image_url")
         url = image_url.get("url") if isinstance(image_url, dict) else None
         if not isinstance(url, str) or not url.startswith("file://"):
             raise ValueError("Baseline example image was not materialized as a local file")
-        blocks.append(msg.image(Path(unquote(urlparse(url).path))))
-    blocks.append(msg.text(problem_text(sample)))
-    blocks.append(msg.image(resolve_image(sample, data_path)))
-    return [msg.system(system_prompt()), msg.user(blocks)]
+        blocks.append(image_block(Path(unquote(urlparse(url).path))))
+    blocks.append({"type": "text", "text": problem_text(sample)})
+    blocks.append(image_block(resolve_image(sample, data_path)))
+    return [{"role": "system", "content": system_prompt()}, {"role": "user", "content": blocks}]
 
 
 def served_model_roots(endpoints: tuple[str, ...], api_key: str) -> dict[str, list[str]]:
@@ -198,12 +174,8 @@ def run_one(
             max_tokens=max_tokens,
             temperature=0.0,
             response_format=response_format_for(sample),
-            max_try=1,
-            wait_time=0.0,
         )
-        if not metadata.responses:
-            raise RuntimeError("RIPO returned no response")
-        raw_output = PIVLM.text(metadata.responses[0])
+        raw_output = metadata.output
         latency_seconds = metadata.latency_sec
         usage = dict(metadata.usage) if metadata.usage else None
         if usage is not None:
@@ -315,8 +287,8 @@ def main() -> None:
         type=Path,
         default=env_path("MUSLR_LOCAL_MEDIA_ROOT", output_dir / "muslr_media"),
     )
-    parser.add_argument("--endpoints", default=os.environ.get("MUSLR_BASELINE_JSON_ENDPOINTS", "auto"))
-    parser.add_argument("--model", default=os.environ.get("MUSLR_BASELINE_JSON_MODEL", "anom-pi"))
+    parser.add_argument("--endpoints", default=os.environ.get("MUSLR_BASELINE_JSON_ENDPOINTS", "http://127.0.0.1:8000/v1"))
+    parser.add_argument("--model", default=os.environ.get("MUSLR_BASELINE_JSON_MODEL", "your-served-model-name"))
     parser.add_argument("--api-key", default=os.environ.get("MUSLR_BASELINE_JSON_API_KEY", "EMPTY"))
     parser.add_argument(
         "--image-url-mode",
@@ -341,12 +313,18 @@ def main() -> None:
         parser.error(f"MuSLR data path does not exist: {args.data}")
     if not args.template.is_file():
         parser.error(f"Baseline prompt does not exist: {args.template}")
-    if not RIPO_ROOT.is_dir():
-        parser.error(f"RIPO root does not exist: {RIPO_ROOT}")
     if args.max_tokens < 1 or args.workers < 1 or args.pool_concurrency < 1:
         parser.error("max-tokens, workers, and pool-concurrency must be positive")
     try:
         raw_endpoints = parse_endpoints(args.endpoints)
+        config = ModelConfig(
+            endpoints=raw_endpoints,
+            model=args.model,
+            api_key=args.api_key,
+            timeout=args.timeout,
+            image_url_mode=args.image_url_mode,
+            pool_concurrency=args.pool_concurrency,
+        )
     except ValueError as error:
         parser.error(str(error))
 
@@ -374,18 +352,6 @@ def main() -> None:
         print(f"Validated {len(samples)} of {len(all_samples)} samples: {metadata_path}")
         return
 
-    config = resolve_model_config(
-        ModelConfig(
-            endpoints=raw_endpoints,
-            model=args.model,
-            api_key=args.api_key,
-            timeout=args.timeout,
-            image_url_mode=args.image_url_mode,
-            max_try=1,
-            wait_time=0.0,
-            pool_concurrency=args.pool_concurrency,
-        )
-    )
     roots = served_model_roots(config.endpoints, config.api_key)
     write_metadata(metadata_path, args=args, samples=samples, endpoints=config.endpoints, roots=roots)
 
@@ -424,7 +390,7 @@ def main() -> None:
         )
 
     with (
-        build_ripo_client_from_config(config, max_tokens=args.max_tokens, temperature=0.0) as client,
+        JSONClient(config, max_tokens=args.max_tokens, temperature=0.0) as client,
         args.output.open(mode, encoding="utf-8") as output_file,
         progress,
     ):

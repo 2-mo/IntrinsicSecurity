@@ -14,7 +14,7 @@ class BaselineJSONRunTests(unittest.TestCase):
     def evaluate_output(self, text):
         client = Mock()
         client.complete_with_metadata.return_value = SimpleNamespace(
-            responses=[{"role": "assistant", "content": text}],
+            output=text,
             latency_sec=1.0, usage={"completion_tokens": 20},
             endpoint="http://localhost/v1", model="test-model",
         )
@@ -38,21 +38,6 @@ class BaselineJSONRunTests(unittest.TestCase):
                 self.assertEqual(result["status"], "invalid_json")
                 self.assertIsNone(result["prediction"])
                 self.assertEqual(result["output"], text)
-
-    def test_current_ripo_client_receives_explicit_configuration(self):
-        config = run.ModelConfig(endpoints=("http://localhost/v1",), model="test", pool_concurrency=4, seed=42)
-        with patch.object(run.ripo_client, "PIVLM") as backend:
-            self.assertIs(run.resolve_model_config(config), config)
-            run.build_ripo_client_from_config(config, max_tokens=8192, temperature=0.0)
-        actual_config = backend.call_args.args[0]
-        self.assertEqual(actual_config.endpoints, config.endpoints)
-        self.assertEqual(actual_config.request_seed, 42)
-        self.assertEqual(actual_config.max_tokens, 8192)
-
-    def test_current_ripo_rejects_unresolved_auto_endpoint(self):
-        with patch.object(run, "ripo_client", SimpleNamespace()):
-            with self.assertRaisesRegex(ValueError, "explicit --endpoints"):
-                run.resolve_model_config(run.ModelConfig(endpoints=("auto",)))
 
 
 if __name__ == "__main__":

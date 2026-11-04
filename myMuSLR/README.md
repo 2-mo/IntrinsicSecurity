@@ -1,6 +1,7 @@
 # MuSLR local inference
 
-Qwen3-VL-8B experiments on MuSLR through a RIPO OpenAI-compatible endpoint.
+MuSLR experiments through any OpenAI-compatible vision-language endpoint
+with JSON Schema support, including vLLM. No RIPO installation is required.
 The current runners use JSON Schema responses. Older free-text code is kept in
 `src/legacy/` for reproduction.
 
@@ -11,46 +12,41 @@ The current runners use JSON Schema responses. Older free-text code is kept in
 produces metrics and reports. `src/result_dashboard/` browses results.
 `src/scripts/` contains shell entry points; `src/tests/` contains local tests.
 
-This source package does not include MuSLR data, official prompt files, model
-weights, RIPO, predictions, or a Python environment. Obtain the dataset and
-official prompts from the [MuSLR project](https://github.com/Aiden0526/MuSLR)
-and install [RIPO](https://github.com/2-mo/RIPO) separately. This code was
-validated against RIPO commit `ed37a8770c522cee0a2d8a4b8b65f0ba6cd3b8bc`.
-RIPO later reorganized these APIs, so use that commit for reproduction. The
-runner imports `pi_engine` and `ripo` from `RIPO_ROOT/src`; its Python
-environment must also have RIPO's runtime dependencies installed.
+This directory is a standalone client/evaluation package. Model serving is a
+separate deployment: the host-specific Intern-S2 setup, GPU selection, PiMux
+queues, and service shutdown scripts stay in the parent repository's
+`scripts/intern_s2/` and are not part of the shareable package.
+
+The package contains no MuSLR data, official prompt files, model weights,
+predictions, or Python environment. Obtain the dataset and official prompts
+from the [MuSLR project](https://github.com/Aiden0526/MuSLR).
 
 ## Setup
-
-First check out the compatible RIPO version:
-
-```bash
-git clone https://github.com/2-mo/RIPO.git
-git -C RIPO checkout ed37a8770c522cee0a2d8a4b8b65f0ba6cd3b8bc
-```
 
 From the extracted `myMuSLR` directory, with Python 3.12:
 
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pip install -e /absolute/path/to/RIPO
 cp .env.example .env
 ```
 
-Use the full path to the checkout above. Install or run your model endpoint
-following that RIPO revision's setup guide.
-
-Edit `.env` to set `MUSLR_DATA`, `MUSLR_PROMPT_DIR`, `RIPO_ROOT`, endpoint,
-and served model name. Use absolute paths. `MUSLR_DATA` must point to the
-downloaded MuSLR directory containing `metadata.csv` and `images/`.
-`MUSLR_PROMPT_DIR` must contain `baseline/baseline_CoT.txt` and
-`logicam/prompt.txt` plus `logicam/prompt_fol.txt`. Keep API keys in `.env`;
-the file is ignored by Git.
+Edit `.env` to set `MUSLR_DATA`, `MUSLR_PROMPT_DIR`, the explicit endpoint URL
+(including `/v1`), and served model name. Use absolute paths. `MUSLR_DATA` must
+point to a downloaded MuSLR directory containing `metadata.csv` and `images/`.
+`MUSLR_PROMPT_DIR` must contain `baseline/baseline_CoT.txt`,
+`logicam/prompt.txt`, and `logicam/prompt_fol.txt`. API keys belong in `.env`;
+the file is ignored by the parent repository's Git configuration and excluded
+from the source export.
 
 The endpoint must support image input and `json_schema` response format.
-Set the two `*_ENDPOINTS` values to `auto` only when RIPO endpoint discovery
-is running. Output defaults to `myMuSLR/outputs/` and is ignored by Git.
+The client sends the schema unchanged, uses one request attempt, and does
+not silently fall back if the endpoint rejects structured output. It accepts
+comma-separated endpoints and caps concurrent requests at `pool-concurrency`
+per endpoint. `auto` discovery is unsupported. Images use data URLs by default,
+so the server needs no access to your local files. `--image-url-mode file`
+requires a shared filesystem and a server configured to allow those paths.
+Output defaults to `myMuSLR/outputs/`.
 
 ## Run
 
@@ -90,3 +86,28 @@ More details: [experiment contracts](src/README.md) and
 ```bash
 PYTHONPATH=src:. .venv/bin/python -m unittest discover -s src/tests -v
 ```
+
+## Share this package
+
+From the parent IntrinsicSecurity repository:
+
+```bash
+python scripts/package_muslr.py
+# outputs/share/myMuSLR-standalone.zip
+```
+
+The export uses a source-file allowlist. It excludes `.env`, virtual environments,
+model weights, datasets, results, and this host's deployment scripts. Recipients
+configure their own endpoint and data paths; they do not need access to your
+RIPO backend. Inference does not start or stop their model service.
+
+## Historical RIPO experiments
+
+`run.py` runs the archived free-text prompt using OpenAI by default, with data
+URLs. It accepts `OPENAI_BASE_URL`, `OPENAI_MODEL`, and `OPENAI_API_KEY`, or
+explicit `--base-url`, `--model`, and `--api-key` arguments.
+Only the optional `--batch-backend ripo --media-mode local` path loads the
+separate adapter in `src/muslr_core/ripo_batch.py`. Historical reproduction
+requires a compatible external [RIPO](https://github.com/2-mo/RIPO) checkout
+(commit `ed37a8770c522cee0a2d8a4b8b65f0ba6cd3b8bc`) and `--ripo-root`.
+The JSON runners, evaluation, dashboard, and default tests do not import RIPO.

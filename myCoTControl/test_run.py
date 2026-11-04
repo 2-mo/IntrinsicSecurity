@@ -1,14 +1,32 @@
 """Regression checks for scoring and reasoning-channel handling; no model calls."""
 import unittest
 import json
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from unittest.mock import patch
+
+import run
 
 from run import compliance, infer, prepare, read_checkpoint, split_reasoning, summarize, target_letter
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_failure_diagnostics_work_without_local_weights(self):
+        with TemporaryDirectory() as directory:
+            args = ["run.py", "--model", "remote-model", "--datasets", "gpqa", "--modes", "baseline",
+                    "--limit", "1", "--output", directory]
+            with patch("sys.argv", args), patch.object(run, "OpenAI", side_effect=RuntimeError("offline")), redirect_stdout(StringIO()):
+                with self.assertRaisesRegex(RuntimeError, "offline"):
+                    run.main()
+            metadata = json.loads((Path(directory) / "metadata.json").read_text())
+            error = json.loads((Path(directory) / "last_error.json").read_text())
+            self.assertIsNone(metadata["model_path"])
+            self.assertIsNone(error["model_path_exists"])
+            self.assertIsNone(error["local_weight_files"])
+
     def test_checkpoint_unicode_separators_are_preserved_inside_json_strings(self):
         rows = [{"id": "first", "reasoning": "a\u2028b\u2029c\u0085d"},
                 {"id": "second", "reasoning": "normal"}]

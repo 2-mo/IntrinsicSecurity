@@ -18,11 +18,13 @@ import sys
 import time
 
 import httpx
+from dotenv import load_dotenv
 from openai import OpenAI
 
 ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT / ".env", override=False)
 sys.path.insert(0, str(ROOT))
-from myCoTControl.run import read_checkpoint, split_reasoning
+from benchmark_common.runtime import read_checkpoint, split_reasoning
 
 SPLITS = ("gsm8k", "math", "olympiadbench", "omnimath")
 
@@ -88,17 +90,22 @@ def generate(client, task, model, max_tokens):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data", type=Path, default=ROOT / "datasets/ProcessBench")
-    p.add_argument("--output", type=Path, default=ROOT / "outputs/intern_s2/processbench")
-    p.add_argument("--base-url", default="http://127.0.0.1:22100/v1")
-    p.add_argument("--model", default="Intern-S2-Preview")
+    p.add_argument("--output", type=Path, default=ROOT / "outputs/processbench")
+    p.add_argument("--base-url", default=os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1"))
+    p.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", os.getenv("LOCAL_LLM_API_KEY", "not-needed")))
+    p.add_argument("--model", default=os.getenv("OPENAI_MODEL", "Intern-S2-Preview"))
+    p.add_argument("--model-path", type=Path, help="Optional local weights path for provenance; never loaded by this client")
+    p.add_argument("--timeout", type=float, default=1800)
     p.add_argument("--limit", type=int, default=0, help="Per split; 0=all; limited runs balance error/no-error")
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--max-tokens", type=int, default=16384)
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--evaluate-only", action="store_true")
     args = p.parse_args()
-    if args.limit < 0 or args.workers < 1 or args.max_tokens < 1:
+    if args.limit < 0 or args.workers < 1 or args.max_tokens < 1 or args.timeout <= 0:
         p.error("Invalid limit/workers/max-tokens")
+    if args.dry_run and args.evaluate_only:
+        p.error("--dry-run and --evaluate-only are mutually exclusive")
     template = (Path(__file__).parent / "upstream/templates/critique_template.txt").read_text().strip()
     tasks, expected = [], {}
     for split in SPLITS:
@@ -118,7 +125,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     path = args.output / "predictions.jsonl"
     meta = args.output / "metadata.json"
-    settings = {"model": args.model, "model_path": "/data3/Intern-S2-Preview",
+    settings = {"model": args.model, "model_path": str(args.model_path) if args.model_path else None,
                 "temperature": 0, "seed": 42, "max_tokens": args.max_tokens,
                 "official_code_revision": "e8024636bcabdf8bd514440551b531d3f90dd18b",
                 "expected": expected, "task_sha256": hashlib.sha256(json.dumps(tasks, sort_keys=True).encode()).hexdigest()}
@@ -134,8 +141,8 @@ def main():
             rows[row["id"]] = row
     pending = [t for t in tasks if rows.get(t["id"], {}).get("status") != "ok"]
     if pending and not args.evaluate_only:
-        with OpenAI(base_url=args.base_url, api_key=os.getenv("LOCAL_LLM_API_KEY", "not-needed"),
-                    max_retries=2, http_client=httpx.Client(trust_env=False, timeout=1800)) as client:
+        with OpenAI(base_url=args.base_url, api_key=args.api_key, timeout=args.timeout,
+                    max_retries=2, http_client=httpx.Client(trust_env=False, timeout=args.timeout)) as client:
             models = [m.id for m in client.models.list().data]
             if args.model not in models:
                 raise RuntimeError(f"Requested {args.model}, server offers {models}")
