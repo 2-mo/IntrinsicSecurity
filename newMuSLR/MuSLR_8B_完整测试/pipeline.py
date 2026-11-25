@@ -17,7 +17,7 @@ MODEL = "Qwen3-VL-8B-Instruct"
 OFFICIAL_SHA = "31bf227e30193a39d4e699470f81d8b7c0b2c6fa8de2b8c1acf07c633f2fa01d"
 ENCODER = "sentence-transformers/all-mpnet-base-v2"
 ENCODER_REV = "e8c3b32edf5434bc2275fc9bab85f82640a19130"
-DEFAULT_WEIGHTS = HERE / "official_weights.json"
+DEFAULT_WEIGHTS = HERE / "external" / "weights.json"
 
 
 def digest(path):
@@ -171,7 +171,8 @@ def main():
         action="append",
         help="vLLM URL ending in /v1. Repeat for multiple servers",
     )
-    p.add_argument("--weights", type=Path, default=DEFAULT_WEIGHTS)
+    p.add_argument("--weights", type=Path, default=DEFAULT_WEIGHTS,
+                   help="Fusion coefficients (default: external/weights.json, selected on A-OKVQA)")
     p.add_argument("--output", type=Path, default=Path("runs/official"))
     p.add_argument("--workers", type=int, default=12)
     p.add_argument("--device", default="auto")

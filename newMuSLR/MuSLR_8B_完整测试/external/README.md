@@ -2,10 +2,10 @@
 
 生成器从 A-OKVQA validation 的两组独立照片各取 180 张。每张图保留一道人注视觉选择题，并构造一道条件推理判断题。后者将视觉选项映射到两组后续事件，加入条件、排他约束和可选的未知前提。答案由人注视觉选项与预设规则计算。两组使用固定的来源题号，照片互不重复。
 
-已选定的系数随代码发布，可直接运行官方全量推理及评估：
+主程序默认加载外部选定的系数。在项目入口所在目录运行官方全量推理及评估。
 
 ```bash
-bash run.sh --dataset assets/MuSLR --weights external/weights.json --output runs/official-external
+bash run.sh --dataset assets/MuSLR
 ```
 
 需要重新生成外部题并选参时，在项目的客户端环境、项目入口所在目录运行：
@@ -23,4 +23,4 @@ bash run.sh --dataset assets/MuSLR --weights runs/external-fit/weights.json \
 
 另有 360 道外部确认题。将 `--dataset` 指向 `assets/external/confirmation` 并加 `--external` 即可用固定系数评估新样本。其外部参考推理来自 A-OKVQA 人注解释和生成器的规则推导。
 
-使用官方选定的默认系数，在独立的 180 张确认照片上答对 227/360 题，准确率 63.0556%，与这套外部参考推理的 ROSCOE 对齐分数为 0.831097。
+历史对照使用 `official_weights.json`，在独立的 180 张确认照片上答对 227/360 题，准确率 63.0556%，与这套外部参考推理的 ROSCOE 对齐分数为 0.831097。
