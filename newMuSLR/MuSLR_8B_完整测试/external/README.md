@@ -2,7 +2,13 @@
 
 生成器从 A-OKVQA validation 的两组独立照片各取 180 张。每张图保留一道人注视觉选择题，并构造一道条件推理判断题。后者将视觉选项映射到两组后续事件，加入条件、排他约束和可选的未知前提。答案由人注视觉选项与预设规则计算。两组使用固定的来源题号，照片互不重复。
 
-在项目的客户端环境、项目入口所在目录运行：
+已选定的系数随代码发布，可直接运行官方全量推理及评估：
+
+```bash
+bash run.sh --dataset assets/MuSLR --weights external/weights.json --output runs/official-external
+```
+
+需要重新生成外部题并选参时，在项目的客户端环境、项目入口所在目录运行：
 
 ```bash
 pip install pyarrow==25.0.0
