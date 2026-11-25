@@ -5,6 +5,7 @@ Intern-S2-Preview and an OpenAI-compatible model endpoint.
 
 ## Data and runners
 
+- [MuSLR Qwen3-VL-8B](newMuSLR/MuSLR_8B_完整测试/README.md) runs inference on original images and questions, then scores all 1,093 answers and explanations.
 - `myMuSLR/`: MuSLR baseline/LogiCAM runner, answer and reasoning metrics, and review dashboard.
 - `myCoTControl/`: QA runner using the official prompts and rule graders; baseline and word suppression by default.
 - `myProcessBench/`: critic evaluation using the official prompt and harmonic-mean metric.

@@ -1,0 +1,4 @@
+{
+  "multiple_choice": {"proposal": 2, "zoom": 3, "worlds8": 3},
+  "truth_evaluation": {"proposal": 3, "sentence": 5}
+}
