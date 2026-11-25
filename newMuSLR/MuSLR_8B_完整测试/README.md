@@ -19,6 +19,9 @@ bash run.sh --dataset /path/to/MuSLR --endpoint http://127.0.0.1:8000/v1
 | 参数设置 | 答对 | 准确率 | ROSCOE reasoning_alignment |
 | --- | ---: | ---: | ---: |
 | 官方全量选定的固定系数 | 860 / 1,093 | 78.6825% | 0.899306 |
+| 外部 360 题选定的系数 | 834 / 1,093 | 76.3038% | 0.900086 |
+
+外部设置可直接运行 `bash run.sh --dataset assets/MuSLR --weights external/weights.json --output runs/official-external`。两行使用相同的官方原图、题序和评分器。
 
 ## 在新机器上准备
 
